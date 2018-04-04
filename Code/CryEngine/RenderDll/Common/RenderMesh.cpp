@@ -1537,11 +1537,19 @@ void CRenderMesh::ComputeSkinningCreateBindPoseAndMorphBuffers(CMesh& mesh)
 	{
 		if (mesh.m_pPositions)
 			vertices[i].pos = mesh.m_pPositions[i];
-		else
+		else if (mesh.m_pPositionsF16)
 			vertices[i].pos = mesh.m_pPositionsF16[i].ToVec3();
+		else
+			vertices[i].pos = mesh.m_pP3S_C4B_T2S[i].xyz.ToVec3();
 
 		vertices[i].qtangent = mesh.m_pQTangents[i].GetQ();
-		vertices[i].uv = mesh.m_pTexCoord[i].GetUV();
+		if (mesh.m_pTexCoord)
+			vertices[i].uv = mesh.m_pTexCoord[i].GetUV();
+		else
+			vertices[i].uv = mesh.m_pP3S_C4B_T2S[i].st.ToVec2();
+
+		//vertices[i].qtangent = mesh.m_pQTangents[i].GetQ();
+		//vertices[i].uv = mesh.m_pTexCoord[i].GetUV();
 		vertices[i].morphDeltaOffset = haveDeltaMorphs ? mesh.m_verticesDeltaOffsets[i] : 0;
 		vertices[i].triOffset = count;
 		vertices[i].triCount = buckets[i];
