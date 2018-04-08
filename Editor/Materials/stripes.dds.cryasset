@@ -1,0 +1,10 @@
+<AssetMetadata version="0" type="Texture" guid="a2719741-8050-b146-104c-b284c03ba289" source="stripes.tif">
+ <Files>
+  <File path="stripes.dds"/>
+ </Files>
+ <Details>
+  <Detail name="width">256</Detail>
+  <Detail name="height">256</Detail>
+  <Detail name="mipCount">7</Detail>
+ </Details>
+</AssetMetadata>
