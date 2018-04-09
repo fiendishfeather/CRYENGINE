@@ -68,7 +68,7 @@ void CStandardGraphicsPipeline::Init()
 		//Dymek comment
 		//sceneGBuffer0 (Total_Illumination.cfx) and EReservedTextureSlot in CommonRender.h uses t14, will overlap when EFTT_MAX > 14
 		//adding offset to fix that
-		int slotOffset = 200;
+		int slotOffset = 100; //max is 128
 		for (EEfResTextures texType = EFTT_DIFFUSE; texType < EFTT_MAX; texType = EEfResTextures(texType + 1))
 		{
 			if (texType < 14)

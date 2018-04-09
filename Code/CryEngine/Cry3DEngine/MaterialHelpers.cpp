@@ -39,7 +39,33 @@ s_TexSlotSemantics[] =
 	{ EFTT_TRANSLUCENCY,     "EFTT_TRANSLUCENCY",     false, "Translucency", "_trans"  },
 	{ EFTT_EMITTANCE,        "EFTT_EMITTANCE",        true,  "Emittance",    "_em"     },
 
-	{ EFTT_DETAIL_OVERLAY_SMOOTHNESS,        "EFTT_DETAIL_OVERLAY_SMOOTHNESS",        false,  "Detail_Smoothness",    "" },
+	{ EFTT_LAYER1_DIFFUSE,   "EFTT_LAYER1_DIFFUSE",   true,  "Layer1 Diffuse",    "" },
+	{ EFTT_LAYER1_NORMALS,   "EFTT_LAYER1_NORMALS",   true,  "Layer1 Bumpmap",    "" },
+	{ EFTT_LAYER2_DIFFUSE,   "EFTT_LAYER2_DIFFUSE",   true,  "Layer2 Diffuse",    "" },
+	{ EFTT_LAYER2_NORMALS,   "EFTT_LAYER2_NORMALS",   true,  "Layer2 Bumpmap",    "" },
+	{ EFTT_LAYER3_DIFFUSE,   "EFTT_LAYER3_DIFFUSE",   true,  "Layer3 Diffuse",    "" },
+	{ EFTT_LAYER3_NORMALS,   "EFTT_LAYER3_NORMALS",   true,  "Layer3 Bumpmap",    "" },
+	{ EFTT_LAYER4_DIFFUSE,   "EFTT_LAYER4_DIFFUSE",   true,  "Layer4 Diffuse",    "" },
+	{ EFTT_LAYER4_NORMALS,   "EFTT_LAYER4_NORMALS",   true,  "Layer4 Bumpmap",    "" },
+
+	{ EFTT_LAYER1_WT_DIFFUSE,	"EFTT_LAYER1_WT_DIFFUSE",	true,   "Layer1 WT Diffuse",    "" },
+	{ EFTT_LAYER1_WT_NORMALS,	"EFTT_LAYER1_WT_NORMALS",	true,   "Layer1 WT Bumpmap",    "" },
+	{ EFTT_LAYER2_WT_DIFFUSE,	"EFTT_LAYER2_WT_DIFFUSE",	true,   "Layer2 WT Diffuse",    "" },
+	{ EFTT_LAYER2_WT_NORMALS,	"EFTT_LAYER2_WT_NORMALS",	true,   "Layer2 WT Bumpmap",    "" },
+	{ EFTT_LAYER3_WT_DIFFUSE,	"EFTT_LAYER3_WT_DIFFUSE",	true,   "Layer3 WT Diffuse",    "" },
+	{ EFTT_LAYER3_WT_NORMALS,	"EFTT_LAYER3_WT_NORMALS",	true,   "Layer3 WT Bumpmap",    "" },
+	{ EFTT_LAYER4_WT_DIFFUSE,	"EFTT_LAYER4_WT_DIFFUSE",	true,   "Layer4 WT Diffuse",    "" },
+	{ EFTT_LAYER4_WT_NORMALS,   "EFTT_LAYER4_WT_NORMALS",   true,   "Layer4 WT Bumpmap",    "" },
+
+	{ EFTT_LAYER1_SMOOTHNESS,   "EFTT_LAYER1_SMOOTHNESS",   false,  "Layer1 Smoothness",    "" },
+	{ EFTT_LAYER2_SMOOTHNESS,   "EFTT_LAYER2_SMOOTHNESS",   false,  "Layer2 Smoothness",    "" },
+	{ EFTT_LAYER3_SMOOTHNESS,   "EFTT_LAYER3_SMOOTHNESS",   false,  "Layer3 Smoothness",    "" },
+	{ EFTT_LAYER4_SMOOTHNESS,   "EFTT_LAYER4_SMOOTHNESS",   false,  "Layer4 Smoothness",    "" },
+
+	{ EFTT_LAYER1_WT_SMOOTHNESS,   "EFTT_LAYER1_WT_SMOOTHNESS",   false,  "Layer1 WT Smoothness",    "" },
+	{ EFTT_LAYER2_WT_SMOOTHNESS,   "EFTT_LAYER2_WT_SMOOTHNESS",   false,  "Layer2 WT Smoothness",    "" },
+	{ EFTT_LAYER3_WT_SMOOTHNESS,   "EFTT_LAYER3_WT_SMOOTHNESS",   false,  "Layer3 WT Smoothness",    "" },
+	{ EFTT_LAYER4_WT_SMOOTHNESS,   "EFTT_LAYER4_WT_SMOOTHNESS",   false,  "Layer4 WT Smoothness",    "" },
 
 	// Backwards compatible names are found here and mapped to the updated enum
 	{ EFTT_NORMALS,          "EFTT_BUMP",             false, "Normal",       ""        },         // called "Bump" in the shaders

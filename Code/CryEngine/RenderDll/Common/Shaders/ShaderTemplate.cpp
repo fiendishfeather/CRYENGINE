@@ -248,8 +248,8 @@ EEfResTextures CShaderMan::mfCheckTextureSlotName(const char* mapname)
 	else if (!stricmp(mapname, "$Emittance"))
 		slot = EFTT_EMITTANCE;
 
-	else if (!stricmp(mapname, "$Detail_Smoothness"))
-		slot = EFTT_DETAIL_OVERLAY_SMOOTHNESS;
+	//else if (!stricmp(mapname, "$Detail_Smoothness"))
+	//	slot = EFTT_DETAIL_OVERLAY_SMOOTHNESS;
 
 	// backwards compatible names
 	else if (!stricmp(mapname, "$Cubemap"))
@@ -406,8 +406,8 @@ const char* CShaderMan::mfTemplateTexIdToName(int Id)
 		return "GlossNormalA";
 	case EFTT_EMITTANCE:
 		return "Emittance";
-	case EFTT_DETAIL_OVERLAY_SMOOTHNESS:
-		return "Detail_Smoothness";
+	//case EFTT_DETAIL_OVERLAY_SMOOTHNESS:
+	//	return "Detail_Smoothness";
 	default:
 		return "Unknown";
 	}
@@ -727,7 +727,33 @@ bool CShaderMan::mfRefreshResourceConstants(CShaderResources* Res)
 
 	return bChanged;
 }
+void CShaderMan::mfRefreshResourcesLayerBlend(CShaderResources* Res, EEfResTextures normalsSlot, EEfResTextures smoothnessSlot)
+{
+	int i = normalsSlot;
+	int Flags = 0;
+	if ((!Res->m_Textures[i] || Res->m_Textures[i]->m_Name.empty()))
+		return;
 
+	if (!Res->m_Textures[i])
+		Res->AddTextureMap(i);
+
+	if (!mfLoadResourceTexture((EEfResTextures)i, *Res, Flags))
+		mfLoadDefaultTexture((EEfResTextures)i, *Res, (EEfResTextures)i);
+
+	// Support for gloss in regular normal map
+	CTexture* pTexN = (Res->m_Textures[i] ? Res->m_Textures[i]->m_Sampler.m_pTex : NULL);
+	if (pTexN && (pTexN->GetFlags() & FT_HAS_ATTACHED_ALPHA))
+	{
+		if (!Res->m_Textures[smoothnessSlot])
+			Res->AddTextureMap(smoothnessSlot);
+
+		Res->m_Textures[smoothnessSlot]->m_Name = pTexN->GetSourceName();
+		if (!mfLoadResourceTexture(smoothnessSlot, *Res, Flags | FT_ALPHA))
+			mfLoadDefaultTexture(smoothnessSlot, *Res, EFTT_SMOOTHNESS);
+	}
+
+	return;
+}
 void CShaderMan::mfRefreshResources(CShaderResources* Res, const IRenderer::SLoadShaderItemArgs* pArgs)
 {
 	if (Res)
@@ -735,6 +761,49 @@ void CShaderMan::mfRefreshResources(CShaderResources* Res, const IRenderer::SLoa
 		for (int i = 0; i < EFTT_MAX; i++)
 		{
 			int Flags = 0;
+			//additional slots support for LayerBlend
+			if(i == EFTT_LAYER1_NORMALS)
+			{
+				CShaderMan::mfRefreshResourcesLayerBlend( Res, EFTT_LAYER1_NORMALS, EFTT_LAYER1_SMOOTHNESS);  
+				continue;
+			}
+			if (i == EFTT_LAYER2_NORMALS)
+			{
+				CShaderMan::mfRefreshResourcesLayerBlend(Res, EFTT_LAYER2_NORMALS, EFTT_LAYER2_SMOOTHNESS);
+				continue;
+			}
+			if (i == EFTT_LAYER3_NORMALS)
+			{
+				CShaderMan::mfRefreshResourcesLayerBlend(Res, EFTT_LAYER3_NORMALS, EFTT_LAYER3_SMOOTHNESS);
+				continue;
+			}
+			if (i == EFTT_LAYER4_NORMALS)
+			{
+				CShaderMan::mfRefreshResourcesLayerBlend(Res, EFTT_LAYER4_NORMALS, EFTT_LAYER4_SMOOTHNESS);
+				continue;
+			}
+
+			if (i == EFTT_LAYER1_WT_NORMALS)
+			{
+				CShaderMan::mfRefreshResourcesLayerBlend(Res, EFTT_LAYER1_WT_NORMALS, EFTT_LAYER1_WT_SMOOTHNESS);
+				continue;
+			}
+			if (i == EFTT_LAYER2_WT_NORMALS)
+			{
+				CShaderMan::mfRefreshResourcesLayerBlend(Res, EFTT_LAYER2_WT_NORMALS, EFTT_LAYER2_WT_SMOOTHNESS);
+				continue;
+			}
+			if (i == EFTT_LAYER3_WT_NORMALS)
+			{
+				CShaderMan::mfRefreshResourcesLayerBlend(Res, EFTT_LAYER3_WT_NORMALS, EFTT_LAYER3_WT_SMOOTHNESS);
+				continue;
+			}
+			if (i == EFTT_LAYER4_WT_NORMALS)
+			{
+				CShaderMan::mfRefreshResourcesLayerBlend(Res, EFTT_LAYER4_WT_NORMALS, EFTT_LAYER4_WT_SMOOTHNESS);
+				continue;
+			}
+			//////////////////////////////////////-/
 			if (i == EFTT_NORMALS)
 			{
 				if ((!Res->m_Textures[i] || Res->m_Textures[i]->m_Name.empty()))

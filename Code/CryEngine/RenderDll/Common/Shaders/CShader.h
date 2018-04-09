@@ -246,6 +246,7 @@ private:
 	CShader*       mfCompile(CShader* ef, char* scr);
 
 	void           mfRefreshResources(CShaderResources* Res, const IRenderer::SLoadShaderItemArgs* pArgs = 0);
+	void           mfRefreshResourcesLayerBlend(CShaderResources* Res, EEfResTextures normalsSlot, EEfResTextures smoothnessSlot);
 
 	bool           mfReloadShaderFile(const char* szName, int nFlags);
 #if CRY_PLATFORM_DESKTOP

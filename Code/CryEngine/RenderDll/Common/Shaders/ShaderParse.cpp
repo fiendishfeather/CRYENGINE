@@ -163,8 +163,8 @@ SShaderGenBit* CShaderMan::mfCompileShaderGenProperty(char* scr)
 						break;
 					case EFTT_EMITTANCE:
 						break;
-					case EFTT_DETAIL_OVERLAY_SMOOTHNESS:
-						break;
+					//case EFTT_DETAIL_OVERLAY_SMOOTHNESS:
+					//	break;
 					}
 					break;
 				}
@@ -249,8 +249,8 @@ SShaderGenBit* CShaderMan::mfCompileShaderGenProperty(char* scr)
 						break;
 					case EFTT_EMITTANCE:
 						break;
-					case EFTT_DETAIL_OVERLAY_SMOOTHNESS:
-						break;
+					//case EFTT_DETAIL_OVERLAY_SMOOTHNESS:
+					//	break;
 					}
 					break;
 				}

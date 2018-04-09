@@ -41,7 +41,33 @@ s_TexSlotSemantics[] =
 	{ EFTT_TRANSLUCENCY,     2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "_trans",  "TM_Translucency",    "$TEX_Translucency"    },
 	{ EFTT_EMITTANCE,        1, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "_em",     "TM_Emittance",       "$TEX_Emittance"       },
 
-	{ EFTT_DETAIL_OVERLAY_SMOOTHNESS, 2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",     "TM_Detail_Smoothness",       "$TEX_Detail_Smoothness" },
+	{ EFTT_LAYER1_DIFFUSE,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer1_Diffuse",  "$TEX_Layer1_Diffuse"  },
+	{ EFTT_LAYER1_NORMALS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer1_Normals",  "$TEX_Layer1_Normals"  },
+	{ EFTT_LAYER2_DIFFUSE,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer2_Diffuse",  "$TEX_Layer2_Diffuse" },
+	{ EFTT_LAYER2_NORMALS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer2_Normals",  "$TEX_Layer2_Normals" },
+	{ EFTT_LAYER3_DIFFUSE,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer3_Diffuse",  "$TEX_Layer3_Diffuse" },
+	{ EFTT_LAYER3_NORMALS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer3_Normals",  "$TEX_Layer3_Normals" },
+	{ EFTT_LAYER4_DIFFUSE,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer4_Diffuse",  "$TEX_Layer4_Diffuse" },
+	{ EFTT_LAYER4_NORMALS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer4_Normals",  "$TEX_Layer4_Normals" },
+
+	{ EFTT_LAYER1_WT_DIFFUSE,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer1_WT_Diffuse",  "$TEX_Layer1_WT_Diffuse" },
+	{ EFTT_LAYER1_WT_NORMALS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer1_WT_Normals",  "$TEX_Layer1_WT_Normals" },
+	{ EFTT_LAYER2_WT_DIFFUSE,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer2_WT_Diffuse",  "$TEX_Layer2_WT_Diffuse" },
+	{ EFTT_LAYER2_WT_NORMALS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer2_WT_Normals",  "$TEX_Layer2_WT_Normals" },
+	{ EFTT_LAYER3_WT_DIFFUSE,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer3_WT_Diffuse",  "$TEX_Layer3_WT_Diffuse" },
+	{ EFTT_LAYER3_WT_NORMALS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer3_WT_Normals",  "$TEX_Layer3_WT_Normals" },
+	{ EFTT_LAYER4_WT_DIFFUSE,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer4_WT_Diffuse",  "$TEX_Layer4_WT_Diffuse" },
+	{ EFTT_LAYER4_WT_NORMALS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer4_WT_Normals",  "$TEX_Layer4_WT_Normals" },
+
+	{ EFTT_LAYER1_SMOOTHNESS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer1_Smoothness",  "$TEX_Layer1_Smoothness" },
+	{ EFTT_LAYER2_SMOOTHNESS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer2_Smoothness",  "$TEX_Layer2_Smoothness" },
+	{ EFTT_LAYER3_SMOOTHNESS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer3_Smoothness",  "$TEX_Layer3_Smoothness" },
+	{ EFTT_LAYER4_SMOOTHNESS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer4_Smoothness",  "$TEX_Layer4_Smoothness" },
+
+	{ EFTT_LAYER1_WT_SMOOTHNESS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer1_WT_Smoothness",  "$TEX_Layer1_WT_Smoothness" },
+	{ EFTT_LAYER2_WT_SMOOTHNESS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer2_WT_Smoothness",  "$TEX_Layer2_WT_Smoothness" },
+	{ EFTT_LAYER3_WT_SMOOTHNESS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer3_WT_Smoothness",  "$TEX_Layer3_WT_Smoothness" },
+	{ EFTT_LAYER4_WT_SMOOTHNESS,   2, &CRendererResources::s_ptexWhite,     &CRendererResources::s_ptexWhite,    "",        "TM_Layer4_WT_Smoothness",  "$TEX_Layer4_WT_Smoothness" },
 
 	// This is the terminator for the name-search
 	{ EFTT_UNKNOWN,          0, &CRendererResources::s_pTexNULL,      &CRendererResources::s_pTexNULL,     "",        nullptr,              nullptr                },
