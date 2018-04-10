@@ -36,10 +36,10 @@ public:
 	// default for water volume and ocean
 	enum EPerInstanceTexture
 	{
-		/*ePerInstanceTexture_PerlinNoise = 14,
-		ePerInstanceTexture_Jitter      = 15,*/
-		ePerInstanceTexture_PerlinNoise = 54,
-		ePerInstanceTexture_Jitter = 55,
+		ePerInstanceTexture_PerlinNoise = 14,
+		ePerInstanceTexture_Jitter      = 15,
+		//ePerInstanceTexture_PerlinNoise = 54,
+		//ePerInstanceTexture_Jitter = 55,
 
 		ePerInstanceTexture_Count
 	};
@@ -90,7 +90,8 @@ public:
 	};
 	// NOTE: DXOrbis only supports 32 shader slots at this time, don't use t32 or higher if DXOrbis support is desired!
 	//Dymek comment: commented out, can couse unpredictable consequences(!)
-	//static_assert(ePerPassTexture_Count <= 32, "Bind slot too high for DXOrbis");
+	//enabled again
+	static_assert(ePerPassTexture_Count <= 32, "Bind slot too high for DXOrbis");
 
 	enum EPerPassSampler
 	{
