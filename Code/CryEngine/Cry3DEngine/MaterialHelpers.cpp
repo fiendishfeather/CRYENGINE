@@ -367,7 +367,13 @@ void MaterialHelpers::SetTexturesFromXml(SInputShaderResources& pShaderResources
 
 		const char* const szTexmap = texNode->getAttr("Map");
 
-		const EEfResTextures texId = MaterialHelpers::FindTexSlot(szTexmap);
+		EEfResTextures texId = MaterialHelpers::FindTexSlot(szTexmap);
+		//int texId = MaterialHelpers::FindTexSlot(szTexmap);
+		//test
+		/*if (texId >= 100)
+		{
+			texId = texId - 86;
+		}*/
 		if (texId == EFTT_UNKNOWN)
 		{
 			continue;

@@ -20,6 +20,13 @@ class CShadowMapStage : public CGraphicsPipelineStage
 		EPerPassTexture_TerrainNormMap = 28,
 		EPerPassTexture_TerrainBaseMap = 29,
 		EPerPassTexture_DissolveNoise  = 31,
+
+		/*EPerPassTexture_PerlinNoiseMap = 45,
+		EPerPassTexture_TerrainElevMap = 46,
+		EPerPassTexture_WindGrid       = 47,
+		EPerPassTexture_TerrainNormMap = 48,
+		EPerPassTexture_TerrainBaseMap = 49,
+		EPerPassTexture_DissolveNoise  = 51,*/
 	};
 
 	enum EPass

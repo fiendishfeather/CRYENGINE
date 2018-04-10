@@ -14,6 +14,7 @@ class CSceneCustomStage : public CGraphicsPipelineStage
 	enum EPerPassTexture
 	{
 		ePerPassTexture_PerlinNoiseMap = 25,
+		//ePerPassTexture_PerlinNoiseMap = 45,
 		ePerPassTexture_TerrainElevMap,
 		ePerPassTexture_WindGrid,
 		ePerPassTexture_TerrainNormMap,

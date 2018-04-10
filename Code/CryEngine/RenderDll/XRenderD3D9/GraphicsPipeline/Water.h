@@ -36,8 +36,10 @@ public:
 	// default for water volume and ocean
 	enum EPerInstanceTexture
 	{
-		ePerInstanceTexture_PerlinNoise = 14,
-		ePerInstanceTexture_Jitter      = 15,
+		/*ePerInstanceTexture_PerlinNoise = 14,
+		ePerInstanceTexture_Jitter      = 15,*/
+		ePerInstanceTexture_PerlinNoise = 54,
+		ePerInstanceTexture_Jitter = 55,
 
 		ePerInstanceTexture_Count
 	};
@@ -64,10 +66,31 @@ public:
 		ePerPassTexture_Refraction            = 30,
 		ePerPassTexture_Reflection            = 31,
 
+		/*ePerPassTexture_WaterGloss = 56,
+		ePerPassTexture_Foam = 57,
+		ePerPassTexture_RainRipple = 58,
+
+		ePerPassTexture_ShadowMap0 = 59,
+		ePerPassTexture_ShadowMap1 = 60,
+		ePerPassTexture_ShadowMap2 = 61,
+		ePerPassTexture_ShadowMap3 = 62,
+
+		ePerPassTexture_VolFogShadow = 63,
+		ePerPassTexture_VolumetricFog = 64,
+		ePerPassTexture_VolFogGlobalEnvProbe0 = 65,
+		ePerPassTexture_VolFogGlobalEnvProbe1 = 66,
+
+		ePerPassTexture_WaterRipple = 67,
+		ePerPassTexture_WaterNormal = 68,
+		ePerPassTexture_SceneDepth = 69,
+		ePerPassTexture_Refraction = 70,
+		ePerPassTexture_Reflection = 71,*/
+
 		ePerPassTexture_Count
 	};
 	// NOTE: DXOrbis only supports 32 shader slots at this time, don't use t32 or higher if DXOrbis support is desired!
-	static_assert(ePerPassTexture_Count <= 32, "Bind slot too high for DXOrbis");
+	//Dymek comment: commented out, can couse unpredictable consequences(!)
+	//static_assert(ePerPassTexture_Count <= 32, "Bind slot too high for DXOrbis");
 
 	enum EPerPassSampler
 	{

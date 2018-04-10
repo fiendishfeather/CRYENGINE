@@ -872,7 +872,18 @@ void CShaderResources::RT_UpdateResourceSet()
 		}
 
 		bContainsInvalidTexture |= !CTexture::IsTextureExist(pTex);
-		m_resources.SetTexture(IShader::GetTextureSlot(texType), pTex, hView, EShaderStage_AllWithoutCompute);
+		//LayerBlend stuff - offsetting additional tex slots
+		int slotOffset = 100;
+		int shaderSlot = IShader::GetTextureSlot(texType);
+		if (shaderSlot < 14)
+		{
+			m_resources.SetTexture(IShader::GetTextureSlot(texType), pTex, hView, EShaderStage_AllWithoutCompute);
+		}
+		else
+		{
+			int newShaderSlotWithOffset = shaderSlot + slotOffset - 14;
+			m_resources.SetTexture(newShaderSlotWithOffset, pTex, hView, EShaderStage_AllWithoutCompute);
+		}
 	}
 
 	// TODO: default material created first doesn't have a constant buffer
