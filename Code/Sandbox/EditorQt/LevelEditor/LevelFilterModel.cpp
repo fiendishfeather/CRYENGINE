@@ -76,7 +76,7 @@ bool CLevelFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourc
 	//scan levels tree only
 	QString levelsPath = LevelFileUtils::GetUserBasePath();
 	levelsPath = levelsPath + "/levels";
-	if (childPath.startsWith(levelsPath))
+	if (childPath.startsWith(levelsPath, Qt::CaseInsensitive))
 	{
 		return IsIndexLevelOrContainsLevels(childIndex, childPath);
 	}
