@@ -73,7 +73,17 @@ bool CLevelFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourc
 		return true;
 	}
 
-	return IsIndexLevelOrContainsLevels(childIndex, childPath);
+	//scan levels tree only
+	QString levelsPath = LevelFileUtils::GetUserBasePath();
+	levelsPath = levelsPath + "/levels";
+	if (childPath.startsWith(levelsPath))
+	{
+		return IsIndexLevelOrContainsLevels(childIndex, childPath);
+	}
+	else
+	{
+		return false;
+	}
 }
 
 bool CLevelFilterModel::IsIndexLevel(const QModelIndex& index) const

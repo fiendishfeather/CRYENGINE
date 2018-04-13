@@ -33,6 +33,8 @@ struct CSaveLevelDialog::Implementation
 		{
 			const auto levelDir = LevelFileUtils::GetUserBasePath();
 
+			//QString newLevelDir= levelDir+"/levels";
+
 			pFileSystem = new CAdvancedFileSystemModel(parent);
 			pFileSystem->setRootPath(levelDir); // monitor changes in this folder
 			pFileSystem->setFilter(QDir::AllDirs | QDir::Dirs | QDir::NoDotAndDotDot);
@@ -59,6 +61,8 @@ struct CSaveLevelDialog::Implementation
 			parent->setWindowTitle(title);
 
 			auto levelDir = LevelFileUtils::GetUserBasePath();
+			//QString newLevelDir = levelDir + "/levels";
+			//levelDir = newLevelDir;
 			// Attempt to make the path to the level dir in case it doesn't exist. mkpath will only return false if
 			// the path didn't exist and was also unable to create it.
 			QDir dir(levelDir);
