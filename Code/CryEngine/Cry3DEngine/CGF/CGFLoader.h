@@ -33,6 +33,35 @@ public:
 	virtual bool IsValidationEnabled() { return true; }
 };
 
+class CConverterCGF
+{
+public:
+	CConverterCGF(IChunkFile::ChunkDesc* chunkDesc);
+	~CConverterCGF();
+
+	void Process();
+	void TranslateElemSize();
+	inline int16_t ReadINT16(char *ByteArray, int32_t Offset);
+
+	void ConvertP3s_c4b_t2s();
+	void ConvertNormals();
+	void ConvertTangents();
+
+	int GetStreamType();
+	int GetCount();
+	int GetElemSize();
+	void* GetStreamData();
+private:
+	IChunkFile::ChunkDesc* pChunkDesc;
+
+	int m_nStreamType;
+	int m_nCount;
+	int m_nElemSize;
+	void* m_pStreamData;
+
+	int m_nElemSizeNew;
+};
+
 class CLoaderCGF
 {
 public:
@@ -158,6 +187,8 @@ private:
 
 	AllocFncPtr         m_pAllocFnc;
 	DestructFncPtr      m_pDestructFnc;
+
+	bool isConverted;
 };
 
 #endif //__CGFLoader_h__

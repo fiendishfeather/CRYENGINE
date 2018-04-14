@@ -185,6 +185,7 @@ bool CReadOnlyChunkFile::Read(const char* filename)
 	{
 		nFileSize = gEnv->pCryPak->FGetSize(m_hFile);
 		m_pFileBuffer = new char[nFileSize];
+		//m_pFileBufferConverted = new char[nFileSize*2];
 		m_bOwnFileBuffer = true;
 		if (gEnv->pCryPak->FReadRawAll(m_pFileBuffer, nFileSize, m_hFile) != nFileSize)
 		{
@@ -205,6 +206,7 @@ bool CReadOnlyChunkFile::Read(const char* filename)
 	}
 
 	m_nBufferSize = nFileSize;
+	//m_nBufferSizeConverted = nFileSize*2;
 
 	if (!ReadChunkTableFromBuffer())
 	{

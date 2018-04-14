@@ -77,7 +77,9 @@ private:
 	std::vector<ChunkDesc> m_chunks;
 
 	char*                  m_pFileBuffer;
+	char*                  m_pFileBufferConverted;
 	int                    m_nBufferSize;
+	int                    m_nBufferSizeConverted;
 	bool                   m_bOwnFileBuffer;
 	bool                   m_bNoWarningMode;
 	bool                   m_bLoaded;

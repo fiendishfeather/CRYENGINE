@@ -65,7 +65,86 @@ void Destruct(T* obj, void (* pDestructFnc)(void*))
 	pDestructFnc(reinterpret_cast<void*>(obj));
 }
 }
+/////////////////////////////////////////////////////////////////////////
+CConverterCGF::CConverterCGF(IChunkFile::ChunkDesc* chunkDesc)
+{
+	pChunkDesc = chunkDesc;
+	STREAM_DATA_CHUNK_DESC_0800& chunk = *(STREAM_DATA_CHUNK_DESC_0800*)chunkDesc->data;
+	m_nStreamType = chunk.nStreamType;
+	m_nCount = chunk.nCount;
+	m_nElemSize = chunk.nElementSize;
+	m_pStreamData =  (char*)chunkDesc->data + sizeof(chunk);
+}
+void CConverterCGF::Process()
+{
+	TranslateElemSize();
 
+	switch (m_nStreamType)
+	{
+	case CGF_STREAM_P3S_C4B_T2S:
+		ConvertP3s_c4b_t2s();
+		break;
+	case CGF_STREAM_NORMALS:
+		ConvertNormals();
+		break;
+	case CGF_STREAM_TANGENTS:
+		ConvertTangents();
+		break;
+	default:
+		m_nElemSizeNew = m_nElemSize;  
+		break;
+	} 
+}
+void CConverterCGF::ConvertP3s_c4b_t2s()
+{
+	//m_pStreamDataNew = (void*)malloc(m_nCount + sizeof(SVF_P3S_C4B_T2S));
+	m_nElemSizeNew = sizeof(SVF_P3S_C4B_T2S);
+}
+void CConverterCGF::ConvertNormals()
+{ 
+	m_nElemSizeNew = sizeof(Vec3);
+}
+void CConverterCGF::ConvertTangents()
+{ 
+	m_nElemSizeNew = sizeof(SMeshTangents);
+}
+void CConverterCGF::TranslateElemSize()
+{
+	int *pElemSize = &m_nElemSize;
+	char uintBuff[16];
+	short newElemSize;
+	for (int i = 0; i < sizeof(m_nElemSize); i++) {
+		char buff = *(((char*)pElemSize) + i);
+		uintBuff[i] = buff;
+	}
+	newElemSize = ReadINT16(&uintBuff[0],0);
+	m_nElemSize = newElemSize;
+}
+inline int16_t CConverterCGF::ReadINT16(char *ByteArray, int32_t Offset)
+{
+	int16_t result;
+	memcpy(&result, ByteArray + Offset, sizeof(int16_t));
+	return result;
+}
+int CConverterCGF::GetStreamType()
+{
+	return m_nStreamType;
+}
+int CConverterCGF::GetCount()
+{
+	return m_nCount;
+}
+int CConverterCGF::GetElemSize()
+{
+	return m_nElemSizeNew;
+}
+void* CConverterCGF::GetStreamData()
+{
+	return m_pStreamData;
+}
+CConverterCGF::~CConverterCGF()
+{
+}
 //////////////////////////////////////////////////////////////////////////
 CLoaderCGF::CLoaderCGF(
   AllocFncPtr pAllocFnc,
@@ -3642,10 +3721,28 @@ bool CLoaderCGF::LoadStreamDataChunk(int nChunkId, void*& pStreamData, int& nStr
 	SwapEndian(chunk, pChunkDesc->bSwapEndian);
 	pChunkDesc->bSwapEndian = false;
 
-	nStreamType = chunk.nStreamType;
-	nCount = chunk.nCount;
-	nElemSize = chunk.nElementSize;
-	pStreamData = (char*)pChunkDesc->data + sizeof(chunk);
+	//if (chunk.nElementSize > 1000)
+	if(false)
+	{
+		CConverterCGF *converter = new CConverterCGF(pChunkDesc);
+		converter->Process();
+
+		nStreamType = converter->GetStreamType();
+		nCount = converter->GetCount();
+		nElemSize = converter->GetElemSize();
+		pStreamData = (char*)pChunkDesc->data + sizeof(chunk);
+
+		isConverted = true;
+	}
+	else
+	{
+		nStreamType = chunk.nStreamType;
+		nCount = chunk.nCount;
+		nElemSize = chunk.nElementSize;
+		pStreamData = (char*)pChunkDesc->data + sizeof(chunk);
+
+		isConverted = false;
+	}
 
 	return true;
 }
