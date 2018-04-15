@@ -521,6 +521,9 @@ public:
 	//! Gets current entity EEntityFlagsExtended flags.
 	virtual uint32 GetFlagsExtended() const = 0;
 
+	//! \return true if entity is completely initialized.
+	virtual bool IsInitialized() const = 0;
+
 	//! Checks if this entity was marked for deletion.
 	//! If this function returns true, it will be deleted on next frame, and it is pointless to perform any operations on such entity.
 	//! \return True if entity marked for deletion, false otherwise.
@@ -1088,7 +1091,7 @@ public:
 	virtual bool SetParentSlot(int nParentIndex, int nChildIndex) = 0;
 
 	//! Prepare and update an entity slot to be used with component
-	virtual void UpdateSlotForComponent(IEntityComponent* pComponent) = 0;
+	virtual void UpdateSlotForComponent(IEntityComponent* pComponent, bool callOnTransformChanged = true) = 0;
 
 	//! Assigns a custom material to the specified object slot.
 	//! \param nSlot Index of the slot, if -1 assign this material to all existing slots.

@@ -3,16 +3,16 @@
 #include "StdAfx.h"
 #include "ProjectLoader.h"
 
-#include "EditorImpl.h"
+#include "Impl.h"
 #include "Utils.h"
-
-#include <IEditorImpl.h>
 
 #include <CrySystem/File/CryFile.h>
 #include <CrySystem/ISystem.h>
 #include <CrySystem/ILocalizationManager.h>
 
 namespace ACE
+{
+namespace Impl
 {
 namespace Fmod
 {
@@ -28,11 +28,11 @@ string const g_returnsPath = "/metadata/return/";
 string const g_vcasPath = "/metadata/vca/";
 
 //////////////////////////////////////////////////////////////////////////
-CProjectLoader::CProjectLoader(string const& projectPath, string const& soundbanksPath, CItem& rootItem, ItemCache& itemCache, CEditorImpl& editorImpl)
+CProjectLoader::CProjectLoader(string const& projectPath, string const& soundbanksPath, CItem& rootItem, ItemCache& itemCache, CImpl const& impl)
 	: m_rootItem(rootItem)
 	, m_itemCache(itemCache)
 	, m_projectPath(projectPath)
-	, m_editorImpl(editorImpl)
+	, m_impl(impl)
 {
 	CItem* const pSoundBanksFolder = CreateItem(s_soundBanksFolderName, EItemType::EditorFolder, &m_rootItem);
 	LoadBanks(soundbanksPath, false, *pSoundBanksFolder);
@@ -75,7 +75,7 @@ void CProjectLoader::LoadBanks(string const& folderPath, bool const isLocalized,
 		// We have to exclude the Master Bank, for this we look
 		// for the file that ends with "strings.bank" as it is guaranteed
 		// to have the same name as the Master Bank and there should be unique
-		std::vector<string> banks;
+		AssetNames banks;
 		string masterBankName = "";
 
 		do
@@ -274,7 +274,7 @@ CItem* CProjectLoader::LoadContainer(XmlNodeRef const pNode, EItemType const typ
 CItem* CProjectLoader::LoadSnapshotGroup(XmlNodeRef const pNode, CItem& parent)
 {
 	string name = "";
-	std::vector<string> snapshotsItems;
+	AssetNames snapshotsItems;
 	int const size = pNode->getChildCount();
 
 	for (int i = 0; i < size; ++i)
@@ -450,40 +450,26 @@ CItem* CProjectLoader::LoadVca(XmlNodeRef const pNode, CItem& parent)
 CItem* CProjectLoader::CreateItem(string const& name, EItemType const type, CItem* const pParent, string const& filePath /*= ""*/)
 {
 	ControlId const id = Utils::GetId(type, name, pParent, m_rootItem);
-	auto pItem = static_cast<CItem*>(m_editorImpl.GetItem(id));
+	auto pItem = static_cast<CItem*>(m_impl.GetItem(id));
 
-	if (pItem != nullptr)
-	{
-		if (pItem->IsPlaceholder())
-		{
-			pItem->SetPlaceholder(false);
-			CItem* pParentItem = pParent;
-
-			while (pParentItem != nullptr)
-			{
-				pParentItem->SetPlaceholder(false);
-				pParentItem = static_cast<CItem*>(pParentItem->GetParent());
-			}
-		}
-	}
-	else
+	if (pItem == nullptr)
 	{
 		if (type == EItemType::Bank)
 		{
 			pItem = new CItem(name, id, type, EItemFlags::None, filePath);
 		}
-		else if (type == EItemType::EditorFolder)
+		else if ((type == EItemType::Folder) || (type == EItemType::EditorFolder))
 		{
 			pItem = new CItem(name, id, type, EItemFlags::IsContainer);
+		}
+		else if (type == EItemType::MixerGroup)
+		{
+			pItem = new CItem(name, id, type, EItemFlags::IsContainer);
+			m_emptyMixerGroups.push_back(pItem);
 		}
 		else
 		{
 			pItem = new CItem(name, id, type);
-
-			if (type == EItemType::MixerGroup)
-			{
-				m_emptyMixerGroups.push_back(pItem);
-			}
 		}
 
 		if (pParent != nullptr)
@@ -574,5 +560,6 @@ void CProjectLoader::RemoveEmptyEditorFolders(CItem* const pEditorFolder)
 	}
 }
 } // namespace Fmod
+} // namespace Impl
 } // namespace ACE
 
