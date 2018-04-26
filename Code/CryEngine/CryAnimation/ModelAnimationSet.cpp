@@ -389,8 +389,8 @@ int CAnimationSet::LoadFileLMG(const char* szFilePath, const char* szAnimName)
 void CAnimationSet::prepareLoadCAFs(uint32 nReserveAnimations)
 {
 	uint32 numAnims = m_arrAnimations.size();
-	if (numAnims)
-		CryFatalError("CryAnimation: chrparams file loaded twice");
+	//if (numAnims)
+	//	CryFatalError("CryAnimation: chrparams file loaded twice");
 
 	m_arrAnimations.reserve(nReserveAnimations);
 }
