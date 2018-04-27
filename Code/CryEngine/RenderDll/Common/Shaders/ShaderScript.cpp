@@ -375,6 +375,17 @@ bool CShaderMan::mfModifyGenFlags(CShader* efGen, const CShaderResources* pRes, 
 			continue;
 		if (pRes)
 		{
+			if (pBit->m_nDependencySet & SHGD_TEX_DIFFUSE)
+			{
+				if (!pRes->IsEmpty(EFTT_DIFFUSE))
+					nMaskGen |= pBit->m_Mask;
+			}
+			if (pBit->m_nDependencyReset & SHGD_TEX_DIFFUSE)
+			{
+				if (pRes->IsEmpty(EFTT_DIFFUSE))
+					nMaskGen &= ~pBit->m_Mask;
+			}
+
 			if (pBit->m_nDependencySet & SHGD_TEX_NORMALS)
 			{
 				if (!pRes->IsEmpty(EFTT_NORMALS))
@@ -481,6 +492,17 @@ bool CShaderMan::mfModifyGenFlags(CShader* efGen, const CShaderResources* pRes, 
 			if (pBit->m_nDependencyReset & SHGD_TEX_CUSTOM_SECONDARY)
 			{
 				if (pRes->IsEmpty(EFTT_CUSTOM_SECONDARY))
+					nMaskGen &= ~pBit->m_Mask;
+			}
+
+			if (pBit->m_nDependencySet & SHGD_TEX_LAYER1_NORMALS)
+			{
+				if (!pRes->IsEmpty(EFTT_LAYER1_NORMALS))
+					nMaskGen |= pBit->m_Mask;
+			}
+			if (pBit->m_nDependencyReset & SHGD_TEX_LAYER1_NORMALS)
+			{
+				if (pRes->IsEmpty(EFTT_LAYER1_NORMALS))
 					nMaskGen &= ~pBit->m_Mask;
 			}
 		}

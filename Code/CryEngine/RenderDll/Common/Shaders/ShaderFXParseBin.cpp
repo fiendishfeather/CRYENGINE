@@ -4776,6 +4776,9 @@ SShaderTexSlots* CShaderManBin::GetTextureSlots(CParserBin& Parser, SShaderBin* 
 
 			if (setReset & SHGD_TEX_MASK)
 			{
+				if (setReset & SHGD_TEX_DIFFUSE)
+					dependencySlots |= 1 << EFTT_DIFFUSE;
+
 				if (setReset & SHGD_TEX_NORMALS)
 					dependencySlots |= 1 << EFTT_NORMALS;
 
@@ -4805,6 +4808,9 @@ SShaderTexSlots* CShaderManBin::GetTextureSlots(CParserBin& Parser, SShaderBin* 
 
 				if (setReset & SHGD_TEX_CUSTOM_SECONDARY)
 					dependencySlots |= 1 << EFTT_CUSTOM_SECONDARY;
+
+				if (setReset & SHGD_TEX_LAYER1_NORMALS)
+					dependencySlots |= 1 << EFTT_LAYER1_NORMALS;
 			}
 		}
 	}

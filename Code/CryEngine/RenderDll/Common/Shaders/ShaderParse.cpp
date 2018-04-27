@@ -126,6 +126,7 @@ SShaderGenBit* CShaderMan::mfCompileShaderGenProperty(char* scr)
 					switch (slot)
 					{
 					case EFTT_DIFFUSE:
+						shgm->m_nDependencySet |= SHGD_TEX_DIFFUSE;
 						break;
 					case EFTT_NORMALS:
 						shgm->m_nDependencySet |= SHGD_TEX_NORMALS;
@@ -163,8 +164,9 @@ SShaderGenBit* CShaderMan::mfCompileShaderGenProperty(char* scr)
 						break;
 					case EFTT_EMITTANCE:
 						break;
-					//case EFTT_DETAIL_OVERLAY_SMOOTHNESS:
-					//	break;
+					case EFTT_LAYER1_NORMALS:
+						shgm->m_nDependencySet |= SHGD_TEX_LAYER1_NORMALS;
+						break;
 					}
 					break;
 				}
@@ -212,6 +214,7 @@ SShaderGenBit* CShaderMan::mfCompileShaderGenProperty(char* scr)
 					switch (slot)
 					{
 					case EFTT_DIFFUSE:
+						shgm->m_nDependencyReset |= SHGD_TEX_DIFFUSE;
 						break;
 					case EFTT_NORMALS:
 						shgm->m_nDependencyReset |= SHGD_TEX_NORMALS;
@@ -249,8 +252,9 @@ SShaderGenBit* CShaderMan::mfCompileShaderGenProperty(char* scr)
 						break;
 					case EFTT_EMITTANCE:
 						break;
-					//case EFTT_DETAIL_OVERLAY_SMOOTHNESS:
-					//	break;
+					case EFTT_LAYER1_NORMALS:
+						shgm->m_nDependencyReset |= SHGD_TEX_LAYER1_NORMALS;
+						break;
 					}
 					break;
 				}
