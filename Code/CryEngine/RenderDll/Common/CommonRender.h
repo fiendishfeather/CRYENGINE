@@ -623,7 +623,9 @@ struct SResourceBindPoint
 		Sampler             = 2, // HLSL s slot
 		UnorderedAccessView = 3, // HLSL u slot
 
-		Count
+		Count,
+
+		InvalidSlotType
 	};
 
 	SResourceBindPoint() : fastCompare(0) {}

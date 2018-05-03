@@ -470,6 +470,13 @@ void CSvoRenderer::TraceSunShadowsPass()
 	SetupSvoTexturesForRead(m_texInfo, rp, e_svoTI_NumberOfBounces, 0, 0);
 	SetupGBufferTextures(rp);
 
+	int nTex0, nTex1, nTex2;
+	ITerrain* pTerrain = gEnv->p3DEngine->GetITerrain();
+	if (pTerrain)
+		pTerrain->GetAtlasTexId(nTex0, nTex1, nTex2);
+	CTexture* pHM = CTexture::GetByID(nTex2);
+	rp.SetTexture(8, pHM);
+
 	rp.BeginConstantUpdate();
 
 	SetupCommonConstants(NULL, rp, rp.GetRenderTarget(0));
@@ -809,7 +816,7 @@ void CSvoRenderer::UpdateRender(CRenderView* pRenderView)
 
 		UpscalePass(&m_tsDiff);
 	}
-	if (GetIntegratioMode() == 2 && e_svoTI_SpecularAmplifier)
+	if (GetIntegratioMode() == 2 && e_svoTI_SpecularAmplifier && !e_svoTI_SpecularFromDiffuse)
 	{
 		PROFILE_LABEL_SCOPE("TI_UPSCALE_SPEC");
 
@@ -1027,7 +1034,7 @@ void CSvoRenderer::CheckAllocateRT(bool bSpecPass)
 			CheckCreateUpdateRT(m_pRT_AIR_MIN, nAirW, nAirH, eTF_R16G16B16A16F, eTT_2D, FT_STATE_CLAMP, "SVO_AIR_MIN");
 			CheckCreateUpdateRT(m_pRT_AIR_MAX, nAirW, nAirH, eTF_R16G16B16A16F, eTT_2D, FT_STATE_CLAMP, "SVO_AIR_MAX");
 		}
-		if (e_svoTI_ShadowsFromSun)
+		if (e_svoTI_ShadowsFromSun || e_svoTI_SpecularFromDiffuse)
 		{
 			CheckCreateUpdateRT(m_pRT_SHAD_MIN_MAX, nInW, nInH, eTF_R16G16B16A16F, eTT_2D, FT_STATE_CLAMP, "SVO_SHAD_MIN_MAX");
 			CheckCreateUpdateRT(m_pRT_SHAD_FIN_0, nWidth, nHeight, eTF_R16G16B16A16F, eTT_2D, FT_STATE_CLAMP, "SVO_SHAD_FIN");
@@ -1429,11 +1436,6 @@ uint64 CSvoRenderer::GetRunTimeFlags(bool bDiffuseMode, bool bPixelShader)
 	if ((bPixelShader && e_svoTI_HalfresKernelPrimary) || (!bPixelShader && e_svoTI_HalfresKernelSecondary)) // smaller kernel - less de-mosaic work and faster compute update
 		rtFlags |= g_HWSR_MaskBit[HWSR_HW_PCF_COMPARE];
 
-	// Added because of the vulkan shader limitation for immediate constant array size (shaders will fail as more than 1024 registers are used)
-	#if CRY_RENDERER_VULKAN
-	rtFlags |= g_HWSR_MaskBit[HWSR_HW_PCF_COMPARE];
-	#endif
-
 	if (bPixelShader && !GetIntegratioMode() && e_svoTI_InjectionMultiplier) // read sun light and shadow map during final cone tracing
 		rtFlags |= g_HWSR_MaskBit[HWSR_LIGHT_TEX_PROJ];
 
@@ -1469,8 +1471,14 @@ uint64 CSvoRenderer::GetRunTimeFlags(bool bDiffuseMode, bool bPixelShader)
 		rtFlags |= g_HWSR_MaskBit[HWSR_VOLUMETRIC_FOG];
 	#endif
 
-	if (e_svoTI_ShadowsFromSun && bDiffuseMode)
+	if (e_svoTI_ShadowsFromSun && bDiffuseMode && bPixelShader)
 		rtFlags |= g_HWSR_MaskBit[HWSR_REVERSE_DEPTH];
+
+	if (e_svoTI_SpecularFromDiffuse && bDiffuseMode && bPixelShader)
+		rtFlags |= g_HWSR_MaskBit[HWSR_PROJECTION_MULTI_RES];
+
+	if (e_svoTI_ShadowsFromHeightmap && bPixelShader)
+		rtFlags |= g_HWSR_MaskBit[HWSR_QUALITY1];
 
 	return rtFlags;
 }
@@ -1482,7 +1490,7 @@ int CSvoRenderer::GetIntegratioMode()
 
 int CSvoRenderer::GetIntegratioMode(bool& bSpecTracingInUse)
 {
-	bSpecTracingInUse = (e_svoTI_SpecularAmplifier != 0);
+	bSpecTracingInUse = (e_svoTI_IntegrationMode == 2) || (e_svoTI_SpecularFromDiffuse != 0);
 	return e_svoTI_IntegrationMode;
 }
 
@@ -1565,9 +1573,13 @@ void CSvoRenderer::UpscalePass(SSvoTargetsSet* pTS)
 	rp.SetRenderTarget(0, pTS->pRT_FIN_OUT_0);
 
 	#ifdef FEATURE_SVO_GI_ALLOW_HQ
-	if (pTS == &m_tsDiff && m_pRT_SHAD_FIN_0 && e_svoTI_ShadowsFromSun)
+	if (pTS == &m_tsDiff && m_pRT_SHAD_FIN_0 && (e_svoTI_ShadowsFromSun || e_svoTI_SpecularFromDiffuse))
 		rp.SetRenderTarget(1, m_pRT_SHAD_FIN_0);
 	#endif
+
+	// compute specular form results of diffuse tracing
+	if (pTS == &m_tsDiff && e_svoTI_SpecularFromDiffuse)
+		rp.SetRenderTarget(2, m_tsSpec.pRT_FIN_OUT_0);
 
 	rp.SetRequireWorldPos(true);
 	rp.SetRequirePerViewConstantBuffer(true);

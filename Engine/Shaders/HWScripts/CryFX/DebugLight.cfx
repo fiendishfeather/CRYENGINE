@@ -1,5 +1,4 @@
-// CRYENGINE Source Code File
-// Copyright 2001-2015 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "Common.cfi"
 
@@ -28,7 +27,7 @@ struct SDebugLightApp2VS
 
 struct SDebugLightVS2PS
 {
-	float4 pos : POSITION0;
+	float4 pos : SV_Position;
 	float4 col : COLOR0;
 };
 

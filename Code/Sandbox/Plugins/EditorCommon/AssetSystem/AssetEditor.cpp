@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 #include "StdAfx.h"
 #include "AssetEditor.h"
 
@@ -26,6 +26,11 @@ class CAutoFileRecovery
 public:
 	CAutoFileRecovery(const std::vector<string>& files)
 	{
+		if (files.empty())
+		{
+			return;
+		}
+
 		static const string tempPrefix = GetTemporaryDirectoryPath();
 
 		m_files.reserve(files.size());
@@ -49,7 +54,7 @@ public:
 		}
 	}
 
-	bool IsValid() const { return !m_files.empty(); }
+	bool IsValid() const { return !m_files.empty() || !m_files.capacity(); }
 
 	void Discard()
 	{

@@ -1,5 +1,4 @@
-// CRYENGINE Source Code File
-// Copyright 2001-2015 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "Common.cfi"
 #include "ShadeLib.cfi"
@@ -30,7 +29,7 @@ struct a2v3
 
 struct v2f
 {
-	float4 hPos : POSITION; 
+	float4 hPos : SV_POSITION; 
 	float3 viewDir : TEXCOORD0_centroid;
 };
 
@@ -42,7 +41,7 @@ struct v2fIn
 
 struct v2fOutof
 {
-	float4 hPos : POSITION;
+	float4 hPos : SV_POSITION;
 	float2 baseTC : TEXCOORD0;
 };
 

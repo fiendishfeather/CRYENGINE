@@ -507,7 +507,7 @@ void CModelViewport::LoadObject(const string& fileName, float scale)
 		uint32 isCDF = stricmp(PathUtil::GetExt(file), CRY_CHARACTER_DEFINITION_FILE_EXT) == 0;
 		if (isSKEL || isSKIN || isCGA || isCDF)
 		{
-			m_pCharacterBase = m_pAnimationSystem->CreateInstance(file);
+			m_pCharacterBase = m_pAnimationSystem->CreateInstance(file, CA_CharEditModel);
 			if (GetCharacterBase())
 			{
 				f32 radius = GetCharacterBase()->GetAABB().GetRadius();
@@ -570,7 +570,8 @@ void CModelViewport::OnRender()
 	ProcessKeys();
 	if (m_renderer)
 	{
-		CryDisplayContextHandle displayContextHandle = reinterpret_cast<CryDisplayContextHandle>(GetSafeHwnd());
+		SDisplayContextKey displayContextKey;
+		displayContextKey.key.emplace<HWND>(static_cast<HWND>(GetSafeHwnd()));
 
 		CRect rcClient;
 		GetClientRect(&rcClient);
@@ -587,7 +588,7 @@ void CModelViewport::OnRender()
 
 		Vec3 clearColor = mv_backgroundColor;
 
-		SRenderingPassInfo passInfo = SRenderingPassInfo::CreateGeneralPassRenderingInfo(m_Camera, SRenderingPassInfo::DEFAULT_FLAGS, true, displayContextHandle);
+		SRenderingPassInfo passInfo = SRenderingPassInfo::CreateGeneralPassRenderingInfo(m_Camera, SRenderingPassInfo::DEFAULT_FLAGS, true, displayContextKey);
 		passInfo.GetIRenderView()->SetTargetClearColor(ColorF(clearColor, 1.0f), true);
 
 		{

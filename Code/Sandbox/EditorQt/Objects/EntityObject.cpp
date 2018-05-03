@@ -1449,13 +1449,15 @@ void CEntityObject::GetLocalBounds(AABB& box)
 	{
 		for (int i = 0, n = m_pEntity->GetSlotCount(); i < n; ++i)
 		{
+			AABB localSlotBounds;
+			
 			if (IStatObj* pStatObj = m_pEntity->GetStatObj(i))
 			{
-				box.Add(pStatObj->GetAABB());
+				localSlotBounds = pStatObj->GetAABB();
 			}
 			else if (ICharacterInstance* pCharacter = m_pEntity->GetCharacter(i))
 			{
-				box.Add(pCharacter->GetAABB());
+				localSlotBounds = pCharacter->GetAABB();
 			}
 			else if (IRenderNode* pRenderNode = m_pEntity->GetRenderNode(i))
 			{
@@ -1463,11 +1465,22 @@ void CEntityObject::GetLocalBounds(AABB& box)
 				    && pRenderNode->GetRenderNodeType() != eERType_ParticleEmitter
 				    && pRenderNode->GetRenderNodeType() != eERType_FogVolume)
 				{
-					box.Add(pRenderNode->GetBBox());
+					localSlotBounds = pRenderNode->GetBBox();
+				}
+				else
+				{
+					continue;
 				}
 			}
+			else
+			{
+				continue;
+			}
+			
+			localSlotBounds.SetTransformedAABB(m_pEntity->GetSlotLocalTM(i, false), localSlotBounds);
+			box.Add(localSlotBounds);
 		}
-	}
+}
 }
 
 void CEntityObject::SetModified(bool boModifiedTransformOnly, bool bNotifyObjectManager)
@@ -2916,7 +2929,7 @@ void CEntityObject::Display(CObjectRenderHelper& objRenderHelper)
 		rp.pMatrix = &tm;
 		rp.pMaterial = GetIEditorImpl()->GetIconManager()->GetHelperMaterial();
 
-		SRenderingPassInfo passInfo = SRenderingPassInfo::CreateGeneralPassRenderingInfo(gEnv->p3DEngine->GetRenderingCamera(), SRenderingPassInfo::DEFAULT_FLAGS, true, dc.GetDisplayContextHandle());
+		SRenderingPassInfo passInfo = SRenderingPassInfo::CreateGeneralPassRenderingInfo(gEnv->p3DEngine->GetRenderingCamera(), SRenderingPassInfo::DEFAULT_FLAGS, true, dc.GetDisplayContextKey());
 		m_visualObject->Render(rp, passInfo);
 	}
 
@@ -2947,13 +2960,8 @@ void CEntityObject::Display(CObjectRenderHelper& objRenderHelper)
 		SGeometryDebugDrawInfo dd;
 		dd.tm = wtm;
 		dd.bDrawInFront = false;
-		dd.color = ColorB(0, 0, 0, 1);
+		dd.color = ColorB(CMFCUtils::Rgb2Vec(col), 120);
 		dd.bNoLines = true;
-		float t = GetTickCount() * 0.001f;
-		const float flashPeriodSeconds = 1.6f;
-		float alpha = sinf(t * g_PI2 / flashPeriodSeconds) * 0.5f + 0.5f;
-
-		dd.color.lerpFloat(dd.color, ColorB(112, 204, 182, 255), alpha);
 
 		SEntityPreviewContext preview(dd);
 		preview.bNoRenderNodes = true;

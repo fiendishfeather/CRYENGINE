@@ -1,5 +1,4 @@
-// CRYENGINE Source Code File
-// Copyright 2001-2015 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 
 
 // This is a direct port from CommonCausticsPass into a deferred pass - this will need some optimization
@@ -150,7 +149,7 @@ cbuffer CBDeferredOceanStencil : register(b0)
 	float4x4 transformMatrix;
 };
 
-float4 DeferredOceanCausticsStencilVS(in float3 pos : POSITION) : POSITION
+float4 DeferredOceanCausticsStencilVS(in float3 pos : POSITION) : SV_POSITION
 {
     float4 worldPos = mul(transformMatrix, float4(pos, 1));
 	float4 outPos = mul(CV_ViewProjMatr, worldPos);

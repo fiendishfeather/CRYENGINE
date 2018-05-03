@@ -337,6 +337,7 @@ add_sources("NoUberFile"
 		"CryCore/CryTypeInfo.h"
 		"CryCore/CryTypeInfo.inl"
 		"CryCore/CryVariant.h"
+		"CryCore/optional.h"
 		"CryCore/DynamicEnum.h"
 		"CryCore/Common_TypeInfo2.h"
 		"CryCore/Common_TypeInfo.h"
@@ -1151,7 +1152,7 @@ install_headers(CryMemory CryMono CryMovie CryNetwork CryParticleSystem CryPhysi
 install_headers(CryRenderer CrySandbox CryScriptSystem CrySerialization CryString)
 install_headers(CrySystem CryThreading)
 
-	add_sources("CryEntitySystem_Examples.cpp"
+	add_sources("NoUberFile"
 		PROJECTS CryAPIExamples
 		SOURCE_GROUP "CryEntitySystem"
 			"CryEntitySystem/Examples/SpawnEntity.cpp"

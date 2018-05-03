@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 #include "StdAfx.h"
 #include "AssetBrowser.h"
 #include "AssetDropHandler.h"
@@ -1806,7 +1806,10 @@ void CAssetBrowser::OnNavBack()
 {
 	m_dontPushNavHistory = true;
 
-	m_navigationIndex--;
+	if (m_navigationIndex >= 0)
+	{
+		m_navigationIndex--;
+	}
 
 	if (m_navigationIndex == -1)
 		m_foldersView->ClearSelection();

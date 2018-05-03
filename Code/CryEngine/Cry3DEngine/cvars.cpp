@@ -204,8 +204,8 @@ void CVars::Init()
 	                   " c = disable clipping against water and vis area bounds"
 	                   " z = freeze particle system"
 	                   " t = used by developers to debug test algorithms");
-	REGISTER_CVAR(e_ParticlesThread, 1, VF_BITFIELD,
-	              "Enable particle threading");
+	REGISTER_CVAR(e_ParticlesThread, 4, VF_BITFIELD,
+	              "Enable particle threading: 1 = basic, 4 = optimal");
 	REGISTER_CVAR(e_ParticlesObjectCollisions, 2, VF_NULL,
 	              "Enable particle/object collisions for SimpleCollision:\n"
 	              "  1 = against static objects only, 2 = dynamic also");
@@ -875,8 +875,6 @@ void CVars::Init()
 	              "Min illuminance to determine light effect radius");
 	REGISTER_CVAR(e_ViewDistRatioCustom, 60.0f, VF_NULL | VF_LIVE_CREATE_SYNCED,
 	              "View distance ratio for special marked objects (Players,AI,Vehicles)");
-	REGISTER_CVAR(e_ViewDistRatio3Planar, 0.5f, VF_NULL,
-	              "If not 0 - adjusts object max view distance depending on the area of visible AABB sides, values between 0 to 1 control how strong this effect is applied");
 	REGISTER_CVAR(e_ViewDistMin, 0.0f, VF_NULL | VF_LIVE_CREATE_SYNCED,
 	              "Min distance on what far objects will be culled out");
 	REGISTER_CVAR(e_LodMin, 0, VF_NULL,

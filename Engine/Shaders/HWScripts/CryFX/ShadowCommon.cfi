@@ -1,5 +1,4 @@
-// CRYENGINE Source Code File
-// Copyright 2001-2015 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 
 //--------------------------------------------------------------------------------------------------  		   
 // Common Shadow map functions
@@ -346,13 +345,6 @@ float GetVolumetricCloudShadow(Texture3D volCloudShadowTex, SamplerState volClou
 
 	float opticalThickness = volCloudShadowTex.SampleLevel(volCloudSState, uvw.xyz, 0.0f).x;
 	return max(decayAboveCloud, exp(-opticalThickness));
-}
-
-float GetCloudShadowCommon(float3 worldPos, sampler2D sShadowMap, float4 vAnimParams, float4 vParams)
-{
-	float2 uv = ComputeCloudShadowMapUV(worldPos);
-	float fCloudsShadow = saturate( GetTexture2DLod(sShadowMap, float4((uv * vAnimParams.xy - vAnimParams.zw) , 0, 0)).r * vParams.w );
-	return vParams.z>0 ? 1 - fCloudsShadow : fCloudsShadow;
 }
 
 float GetCloudShadowCommon(float3 worldPos, Texture2D cloudShadowTex, SamplerState bilinearSamplerWrap, float4 vAnimParams, float4 vParams)

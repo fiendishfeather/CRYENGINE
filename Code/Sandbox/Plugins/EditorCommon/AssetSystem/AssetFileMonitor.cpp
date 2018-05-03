@@ -1,4 +1,4 @@
-// Copyright 2001-2016 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "AssetFileMonitor.h"
@@ -53,7 +53,10 @@ void CAssetFileMonitor::OnFileChange(const char* szFilename, EChangeType changeT
 	case IFileChangeListener::eChangeType_RenamedOldName:
 		m_fileQueue.ProcessItemAsync(assetPath, [](const string& assetPath)
 		{
-			RemoveAsset(assetPath);
+			if (!GetISystem()->GetIPak()->IsFileExist(assetPath))
+			{
+				RemoveAsset(assetPath);
+			}
 			return true;
 		});
 		break;

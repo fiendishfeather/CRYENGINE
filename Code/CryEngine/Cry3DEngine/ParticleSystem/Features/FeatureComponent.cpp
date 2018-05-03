@@ -35,9 +35,9 @@ private:
 CRY_PFX2_IMPLEMENT_FEATURE(CParticleFeature, CFeatureComponentEnableIf, "Component", "EnableIf", colorComponent);
 
 //////////////////////////////////////////////////////////////////////////
-// CFeatureComponentSpawnIf
+// CFeatureComponentActivateIf
 
-class CFeatureComponentSpawnIf : public CParticleFeature
+class CFeatureComponentActivateIf : public CParticleFeature
 {
 public:
 	CRY_PFX2_DECLARE_FEATURE
@@ -65,7 +65,67 @@ private:
 	CAttributeReference m_attribute;
 };
 
-CRY_PFX2_IMPLEMENT_FEATURE(CParticleFeature, CFeatureComponentSpawnIf, "Component", "SpawnIf", colorComponent);
+CRY_PFX2_LEGACY_FEATURE(CFeatureComponentActivateIf, "Component", "SpawnIf");
+CRY_PFX2_IMPLEMENT_FEATURE(CParticleFeature, CFeatureComponentActivateIf, "Component", "ActivateIf", colorComponent);
+
+//////////////////////////////////////////////////////////////////////////
+// CFeatureComponentActivateRandom
+
+class CFeatureComponentActivateRandom : public CParticleFeature
+{
+public:
+	CRY_PFX2_DECLARE_FEATURE
+
+public:
+	virtual void AddToComponent(CParticleComponent* pComponent, SComponentParams* pParams) override
+	{
+		pComponent->CullSubInstances.add(this);
+	}
+
+	virtual void Serialize(Serialization::IArchive& ar) override
+	{
+		CParticleFeature::Serialize(ar);
+		SERIALIZE_VAR(ar, m_probability);
+		SERIALIZE_VAR(ar, m_group);
+		if (m_group > 0)
+			SERIALIZE_VAR(ar, m_selectionStart);
+	}
+
+	virtual void CullSubInstances(const SUpdateContext& context, TVarArray<SInstance>& instances) override
+	{
+		if (m_probability == 1.0f)
+			return;
+		uint32 groupKey = context.m_runtime.GetEmitter()->GetCurrentSeed() ^ m_group;
+		uint newCount = 0;
+		for (const auto& instance : instances)
+		{
+			if (m_group > 0)
+			{
+				// Same random number for all components in group
+				SChaosKey instanceKey(groupKey ^ instance.m_parentId);
+				float select = instanceKey.RandUNorm();
+				if (select < m_selectionStart || select > m_selectionStart + m_probability)
+					continue;
+			}
+			else
+			{
+				// New random number for each component and instance
+				if (context.m_spawnRng.RandUNorm() > m_probability)
+					continue;
+			}
+			instances[newCount++] = instance;
+		}
+		instances.resize(newCount);
+	}
+
+private:
+
+	UUnitFloat                   m_probability      = 1.0f;
+	TValue<uint, TDefaultZero<>> m_group;
+	UUnitFloat                   m_selectionStart   = 0.0f;
+};
+
+CRY_PFX2_IMPLEMENT_FEATURE(CParticleFeature, CFeatureComponentActivateRandom, "Component", "ActivateRandom", colorComponent);
 
 //////////////////////////////////////////////////////////////////////////
 // CFeatureComponentEnableByConfig

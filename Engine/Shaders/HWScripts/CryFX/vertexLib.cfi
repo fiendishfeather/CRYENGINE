@@ -1,5 +1,4 @@
-// CRYENGINE Source Code File
-// Copyright 2001-2015 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 
 
 // Common vertex shader. Since almost all techniques share a similar vertex shader, a common vertex shader
@@ -19,7 +18,7 @@
 struct v2f_sh
 {
 	#if %_DS || %_PS || !ENABLE_TESSELLATION || %_RT_NO_TESSELLATION
-		float4 HPosition  : POSITION;
+		float4 HPosition  : SV_POSITION;
 	#endif
 
 	#if ENABLE_TESSELLATION && !%_RT_NO_TESSELLATION

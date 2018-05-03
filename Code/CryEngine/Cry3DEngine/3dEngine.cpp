@@ -17,6 +17,8 @@
 #include <CryAudio/IAudioSystem.h>
 #include <CryParticleSystem/IParticlesPfx2.h>
 
+#include <CryRenderer/IStereoRenderer.h>
+
 #include "3dEngine.h"
 #include "terrain.h"
 #include "VisAreas.h"
@@ -733,6 +735,8 @@ void C3DEngine::Tick()
 
 	GetMatMan()->DelayedMaterialDeletion();
 
+	TickDelayedRenderNodeDeletion();
+
 	// clear stored cameras from last frame
 	m_RenderingPassCameras[nThreadID].resize(0);
 }
@@ -1279,7 +1283,8 @@ void C3DEngine::UpdateRenderingCamera(const char* szCallerName, const SRendering
 	}
 	m_deferredRenderProxyStreamingPriorityUpdates.resize(0);
 
-	gEnv->pRenderer->UpdateAuxDefaultCamera(m_RenderingCamera);
+	if (!gEnv->pRenderer->GetIStereoRenderer() || !gEnv->pRenderer->GetIStereoRenderer()->GetStereoEnabled())
+		gEnv->pRenderer->UpdateAuxDefaultCamera(m_RenderingCamera);
 }
 
 void C3DEngine::PrepareOcclusion(const CCamera& rCamera)
@@ -2975,8 +2980,24 @@ IRenderNode* C3DEngine::CreateRenderNode(EERType type)
 void C3DEngine::DeleteRenderNode(IRenderNode* pRenderNode)
 {
 	LOADING_TIME_PROFILE_SECTION;
+	pRenderNode->SetRndFlags(ERF_PENDING_DELETE, true);
+
 	UnRegisterEntityDirect(pRenderNode);
-	delete pRenderNode;
+
+	m_renderNodesToDelete[m_renderNodesToDeleteID].push_back(pRenderNode);
+}
+
+void C3DEngine::TickDelayedRenderNodeDeletion()
+{
+	m_renderNodesToDeleteID = (m_renderNodesToDeleteID + 1) % CRY_ARRAY_COUNT(m_renderNodesToDelete);
+
+	for (auto pRenderNode : m_renderNodesToDelete[m_renderNodesToDeleteID])
+	{
+		pRenderNode->SetRndFlags(ERF_PENDING_DELETE, false);
+		pRenderNode->ReleaseNode(true);
+	}
+
+	m_renderNodesToDelete[m_renderNodesToDeleteID].clear();
 }
 
 void C3DEngine::SetWind(const Vec3& vWind)
@@ -4155,15 +4176,14 @@ void C3DEngine::SetHeightMapMaxHeight(float fMaxHeight)
 
 ITerrain* C3DEngine::CreateTerrain(const STerrainInfo& TerrainInfo)
 {
-	delete m_pTerrain;
+	DeleteTerrain();
 	m_pTerrain = new CTerrain(TerrainInfo);
 	return (ITerrain*)m_pTerrain;
 }
 
 void C3DEngine::DeleteTerrain()
 {
-	delete m_pTerrain;
-	m_pTerrain = NULL;
+	SAFE_DELETE(m_pTerrain);
 }
 
 void C3DEngine::SetStreamableListener(IStreamedObjectListener* pListener)
@@ -4857,8 +4877,6 @@ SRenderNodeTempData* C3DEngine::CheckAndCreateRenderNodeTempData(IRenderNode* pR
 	CRY_ASSERT(pTempData);
 	if (!pTempData)
 		return nullptr;
-
-	CRY_ASSERT(!pTempData->invalidRenderObjects);
 
 	// Technically this function is unsafe if the same node is hit (non-atomic read-modify-write)
 	// The assumption is that the same node can not be contended for the same condition(s), which is
@@ -6513,36 +6531,13 @@ void C3DEngine::AsyncOctreeUpdate(IRenderNode* pEnt, uint32 nFrameID, bool bUnRe
 		CVegetation* pInst = (CVegetation*)pEnt;
 		pInst->UpdateRndFlags();
 	}
+	else if (eERType == eERType_Decal)
+	{
+		// register decals, to clean up longer not renders decals and their render meshes
+		m_decalRenderNodes.push_back((IDecalRenderNode*)pEnt);
+	}
 
 	pEnt->m_fWSMaxViewDist = pEnt->GetMaxViewDist();
-
-	if (eERType != eERType_Light)
-	{
-		if (fObjRadiusSqr > sqr(MAX_VALID_OBJECT_VOLUME) || !_finite(fObjRadiusSqr))
-		{
-			Warning("I3DEngine::RegisterEntity: Object has invalid bbox: name: %s, class name: %s, GetRadius() = %.2f",
-			        pEnt->GetName(), pEnt->GetEntityClassName(), fObjRadiusSqr);
-			return; // skip invalid objects - usually only objects with invalid very big scale will reach this point
-		}
-
-		if (dwRndFlags & ERF_RENDER_ALWAYS)
-		{
-			if (m_lstAlwaysVisible.Find(pEnt) < 0)
-				m_lstAlwaysVisible.Add(pEnt);
-
-			if (dwRndFlags & ERF_HUD)
-				return;
-		}
-	}
-	else
-	{
-		CLightEntity* pLight = (CLightEntity*)pEnt;
-		if ((pLight->GetLightProperties().m_Flags & (DLF_IGNORES_VISAREAS | DLF_DEFERRED_LIGHT | DLF_THIS_AREA_ONLY)) == (DLF_IGNORES_VISAREAS | DLF_DEFERRED_LIGHT))
-		{
-			if (m_lstAlwaysVisible.Find(pEnt) < 0)
-				m_lstAlwaysVisible.Add(pEnt);
-		}
-	}
 
 	//////////////////////////////////////////////////////////////////////////
 	// Check for occlusion proxy.
@@ -6558,6 +6553,35 @@ void C3DEngine::AsyncOctreeUpdate(IRenderNode* pEnt, uint32 nFrameID, bool bUnRe
 		}
 	}
 
+	if (eERType != eERType_Light)
+	{
+		if (fObjRadiusSqr > sqr(MAX_VALID_OBJECT_VOLUME) || !_finite(fObjRadiusSqr))
+		{
+			Warning("I3DEngine::RegisterEntity: Object has invalid bbox: name: %s, class name: %s, GetRadius() = %.2f",
+			        pEnt->GetName(), pEnt->GetEntityClassName(), fObjRadiusSqr);
+			return; // skip invalid objects - usually only objects with invalid very big scale will reach this point
+		}
+
+		if (dwRndFlags & ERF_RENDER_ALWAYS)
+		{
+			if (m_lstAlwaysVisible.Find(pEnt) < 0)
+				m_lstAlwaysVisible.Add(pEnt);
+
+			return;
+		}
+	}
+	else
+	{
+		CLightEntity* pLight = (CLightEntity*)pEnt;
+		if ((pLight->GetLightProperties().m_Flags & (DLF_IGNORES_VISAREAS | DLF_DEFERRED_LIGHT | DLF_THIS_AREA_ONLY)) == (DLF_IGNORES_VISAREAS | DLF_DEFERRED_LIGHT))
+		{
+			if (m_lstAlwaysVisible.Find(pEnt) < 0)
+				m_lstAlwaysVisible.Add(pEnt);
+
+			return;
+		}
+	}
+
 	//////////////////////////////////////////////////////////////////////////
 	if (pEnt->m_dwRndFlags & ERF_OUTDOORONLY || !(m_pVisAreaManager && m_pVisAreaManager->SetEntityArea(pEnt, aabb, fObjRadiusSqr)))
 	{
@@ -6565,12 +6589,6 @@ void C3DEngine::AsyncOctreeUpdate(IRenderNode* pEnt, uint32 nFrameID, bool bUnRe
 		{
 			m_pObjectsTree->InsertObject(pEnt, aabb, fObjRadiusSqr, aabb.GetCenter());
 		}
-	}
-
-	// register decals, to clean up longer not renders decals and their render meshes
-	if (eERType == eERType_Decal)
-	{
-		m_decalRenderNodes.push_back((IDecalRenderNode*)pEnt);
 	}
 }
 

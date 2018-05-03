@@ -339,6 +339,9 @@ void CEntitySystem::Reset()
 
 	m_genIdMap.clear();
 
+	m_updatedEntityComponents.Clear();
+	m_prePhysicsUpdatedEntityComponents.Clear();
+
 	// Delete entities that have already been added to the delete list.
 	DeletePendingEntities();
 
@@ -364,8 +367,6 @@ void CEntitySystem::Reset()
 	DeletePendingEntities();
 
 	ClearEntityArray();
-	m_updatedEntityComponents.Clear();
-	m_prePhysicsUpdatedEntityComponents.Clear();
 
 	stl::free_container(m_deletedEntities);
 	m_guidMap.clear();
@@ -618,8 +619,8 @@ bool CEntitySystem::InitEntity(IEntity* pEntity, SEntitySpawnParams& params)
 	// initialize entity
 	if (!pCEntity->Init(params))
 	{
-		// The entity may have already be scheduled for deletion [7/6/2010 evgeny]
-		if (std::find(m_deletedEntities.begin(), m_deletedEntities.end(), pCEntity) == m_deletedEntities.end())
+		// The entity may have already be scheduled for deletion
+		if (!pCEntity->IsGarbage() || std::find(m_deletedEntities.begin(), m_deletedEntities.end(), pCEntity) == m_deletedEntities.end())
 		{
 			DeleteEntity(pCEntity);
 		}
@@ -770,19 +771,20 @@ void CEntitySystem::RemoveEntity(CEntity* pEntity, bool forceRemoveImmediately, 
 				}
 			}
 
+			// Mark the entity for deletion before sending the ENTITY_EVENT_DONE event
+			// This protects against cases where the event results in another deletion request for the same entity
+			pEntity->SetInternalFlag(CEntity::EInternalFlag::MarkedForDeletion, true);
+
 			// Send deactivate event.
 			SEntityEvent entevent;
 			entevent.event = ENTITY_EVENT_DONE;
 			entevent.nParam[0] = pEntity->GetId();
-			pEntity->SendEvent(entevent);
+			pEntity->SendEventInternal(entevent);
 
 			pEntity->PrepareForDeletion();
 
-			pEntity->ClearComponentEventListeners();
-
 			if (!(pEntity->m_flags & ENTITY_FLAG_UNREMOVABLE) && pEntity->m_keepAliveCounter == 0)
 			{
-				pEntity->m_flags |= ENTITY_FLAG_REMOVED;
 				if (forceRemoveImmediately)
 				{
 					DeleteEntity(pEntity);
@@ -798,8 +800,6 @@ void CEntitySystem::RemoveEntity(CEntity* pEntity, bool forceRemoveImmediately, 
 				// Unremovable entities. are hidden and deactivated.
 				pEntity->Hide(true);
 
-				pEntity->m_flags |= ENTITY_FLAG_REMOVED;
-
 				// remember kept alive entities to get rid of them as soon as they are no longer needed
 				if (pEntity->m_keepAliveCounter > 0 && !(pEntity->m_flags & ENTITY_FLAG_UNREMOVABLE))
 				{
@@ -808,6 +808,16 @@ void CEntitySystem::RemoveEntity(CEntity* pEntity, bool forceRemoveImmediately, 
 			}
 		}
 	}
+}
+
+//////////////////////////////////////////////////////////////////////
+void CEntitySystem::ResurrectGarbageEntity(CEntity* pEntity)
+{
+	CRY_ASSERT(pEntity->HasInternalFlag(CEntity::EInternalFlag::MarkedForDeletion));
+	pEntity->SetInternalFlag(CEntity::EInternalFlag::MarkedForDeletion, false);
+
+	// Entity may have been queued for deletion
+	stl::find_and_erase(m_deletedEntities, pEntity);
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -928,11 +938,11 @@ void CEntitySystem::PrePhysicsUpdate()
 	SEntityEvent event(ENTITY_EVENT_PREPHYSICSUPDATE);
 	event.fParam[0] = gEnv->pTimer->GetFrameTime();
 
-	m_prePhysicsUpdatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> bool
+	m_prePhysicsUpdatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> EComponentIterationResult
 	{
 		rec.pComponent->ProcessEvent(event);
 
-		return true;
+		return EComponentIterationResult::Continue;
 	});
 }
 
@@ -1461,11 +1471,11 @@ void CEntitySystem::UpdateEntityComponents(float fFrameTime)
 	case (int)EComponentProfilingType::Disabled:
 		{
 #endif
-	m_updatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> bool
+	m_updatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> EComponentIterationResult
 	{
 		rec.pComponent->ProcessEvent(event);
 
-		return true;
+		return EComponentIterationResult::Continue;
 	});
 
 #ifdef INCLUDE_ENTITYSYSTEM_PRODUCTION_CODE
@@ -1475,11 +1485,11 @@ case(int)EComponentProfilingType::Simple:
 {
 	CTimeValue timeBeforeComponentUpdate = gEnv->pTimer->GetAsyncTime();
 
-	m_updatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> bool
+	m_updatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> EComponentIterationResult
 	{
 		rec.pComponent->ProcessEvent(event);
 
-		return true;
+		return EComponentIterationResult::Continue;
 	});
 
 	CTimeValue timeAfterComponentUpdate = gEnv->pTimer->GetAsyncTime();
@@ -1489,7 +1499,7 @@ case(int)EComponentProfilingType::Simple:
 	EntityId renderedEntityCount = 0;
 	EntityId physicalizedEntityCount = 0;
 
-	m_updatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> bool
+	m_updatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> EComponentIterationResult
 	{
 		CEntity* pEntity = static_cast<CEntity*>(rec.pComponent->GetEntity());
 
@@ -1507,7 +1517,7 @@ case(int)EComponentProfilingType::Simple:
 			}
 		}
 
-		return true;
+		return EComponentIterationResult::Continue;
 	});
 
 	IRenderAuxGeom* pRenderAuxGeom = gEnv->pAuxGeomRenderer;
@@ -1539,7 +1549,7 @@ case(int)EComponentProfilingType::TypeCostBreakdown:
 
 	CTimeValue timeBeforeComponentsUpdate = gEnv->pTimer->GetAsyncTime();
 
-	m_updatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> bool
+	m_updatedEntityComponents.ForEach([&](const SMinimalEntityComponentRecord& rec) -> EComponentIterationResult
 	{
 		IEntityComponent* pEntityComponent = rec.GetComponent();
 
@@ -1578,7 +1588,7 @@ case(int)EComponentProfilingType::TypeCostBreakdown:
 			it->second.totalCostMs += (timeAfterComponentUpdate - timeBeforeComponentUpdate).GetMilliSeconds();
 		}
 
-		return true;
+		return EComponentIterationResult::Continue;
 	});
 
 	CTimeValue timeAfterComponentsUpdate = gEnv->pTimer->GetAsyncTime();
@@ -1738,8 +1748,8 @@ void CEntitySystem::GetMemoryStatistics(ICrySizer* pSizer) const
 	pSizer->AddObject(m_pClassRegistry);
 	pSizer->AddContainer(m_mapEntityNames);
 
-	pSizer->AddContainer(m_updatedEntityComponents.GetVector());
-	pSizer->AddContainer(m_prePhysicsUpdatedEntityComponents.GetVector());
+	m_updatedEntityComponents.GetMemoryStatistics(pSizer);
+	m_prePhysicsUpdatedEntityComponents.GetMemoryStatistics(pSizer);
 
 	{
 		SIZER_COMPONENT_NAME(pSizer, "Entities");
@@ -3176,14 +3186,16 @@ void CEntitySystem::EndCreateEntities()
 	m_pEntityLoadManager->OnBatchCreationCompleted();
 }
 
-void CEntitySystem::PurgeDeferredCollisionEvents(bool bForce)
+void CEntitySystem::PurgeDeferredCollisionEvents(bool force)
 {
-	// make sure we deleted entities which needed to keep alive for deferred execution when they are no longer needed
-	for (std::vector<CEntity*>::iterator it = m_deferredUsedEntities.begin(); it != m_deferredUsedEntities.end(); )
+	for (std::vector<CEntity*>::iterator it = m_deferredUsedEntities.begin(); it != m_deferredUsedEntities.end();)
 	{
-		if ((*it)->m_keepAliveCounter == 0 || bForce)
+		CEntity* pEntity = *it;
+
+		if (pEntity->m_keepAliveCounter == 0 || force)
 		{
-			stl::push_back_unique(m_deletedEntities, *it);
+			CRY_ASSERT_MESSAGE(pEntity->IsGarbage(), "Entity must have been marked as removed to be deferred deleted!");
+			stl::push_back_unique(m_deletedEntities, pEntity);
 			it = m_deferredUsedEntities.erase(it);
 		}
 		else
@@ -3229,14 +3241,15 @@ void CEntitySystem::EnableComponentUpdates(IEntityComponent* pComponent, bool bE
 		bool bRequiresUpdate = false;
 
 		// Check if any other components need the update event
-		pEntity->m_components.ForEach([pComponent, &bRequiresUpdate](const SEntityComponentRecord& otherComponentRecord) -> bool
+		pEntity->m_components.NonRecursiveForEach([pComponent, &bRequiresUpdate](const SEntityComponentRecord& otherComponentRecord) -> EComponentIterationResult
 		{
 			if (otherComponentRecord.pComponent.get() != pComponent && (otherComponentRecord.registeredEventsMask & ENTITY_EVENT_BIT(ENTITY_EVENT_UPDATE)) != 0)
 			{
-			  bRequiresUpdate = true;
+				bRequiresUpdate = true;
+				return EComponentIterationResult::Break;
 			}
 
-			return !bRequiresUpdate;
+			return EComponentIterationResult::Continue;
 		});
 
 		if (!bRequiresUpdate)

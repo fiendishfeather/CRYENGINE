@@ -63,10 +63,10 @@ NetworkAspectType CNetEntity::CombineAspects()
 	  eEA_GameServerE;
 
 	NetworkAspectType aspects = 0;
-	m_pEntity->m_components.ForEach([&aspects](const SEntityComponentRecord& componentRecord) -> bool
+	m_pEntity->m_components.NonRecursiveForEach([&aspects](const SEntityComponentRecord& componentRecord) -> EComponentIterationResult
 	{
 		aspects |= componentRecord.pComponent->GetNetSerializeAspectMask();
-		return true;
+		return EComponentIterationResult::Continue;
 	});
 	aspects &= gameObjectAspects;
 
@@ -175,10 +175,10 @@ bool CNetEntity::HasProfileManager()
 
 bool CNetEntity::NetSerializeEntity(TSerialize ser, EEntityAspects aspect, uint8 profile, int flags)
 {
-	m_pEntity->m_components.ForEach([&](const SEntityComponentRecord& componentRecord) -> bool
+	m_pEntity->m_components.ForEach([&ser, aspect, profile, flags](const SEntityComponentRecord& componentRecord) -> EComponentIterationResult
 	{
 		componentRecord.pComponent->NetSerialize(ser, aspect, profile, flags);
-		return true;
+		return EComponentIterationResult::Continue;
 	});
 
 	// #netentity: compare to GameContext::SynchObject, physics aspect. what happens there and here?
@@ -402,19 +402,22 @@ void CNetEntity::OnNetworkedEntityTransformChanged(EntityTransformationFlagsMask
 	}
 }
 
+void CNetEntity::OnComponentAddedDuringInitialization(IEntityComponent* pComponent) const
+{
+	if (m_pSpawnSerializer == nullptr)
+		return;
+
+	const bool isNetworked = !pComponent->GetComponentFlags().CheckAny({ EEntityComponentFlags::ServerOnly, EEntityComponentFlags::ClientOnly, EEntityComponentFlags::NetNotReplicate });
+	if (isNetworked)
+	{
+		pComponent->NetReplicateSerialize(*m_pSpawnSerializer);
+	}
+}
+
 void CNetEntity::OnEntityInitialized()
 {
-	if(m_pSpawnSerializer != nullptr)
-	{
-		m_pEntity->m_components.ForEach([this](const SEntityComponentRecord& componentRecord) -> bool
-		{
-			componentRecord.pComponent->NetReplicateSerialize(*m_pSpawnSerializer);
-			return true;
-		});
-
-		// Spawn serializer will be released after entity initialization
-		m_pSpawnSerializer = nullptr;
-	}
+	// Spawn serializer will be released after entity initialization
+	m_pSpawnSerializer = nullptr;
 }
 
 /* static */ void CNetEntity::UpdateSchedulingProfiles()

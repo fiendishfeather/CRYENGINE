@@ -47,11 +47,6 @@ void CTiledShadingStage::Execute()
 
 	int screenWidth = GetViewport().width;
 	int screenHeight = GetViewport().height;
-	int gridWidth = screenWidth;
-	int gridHeight = screenHeight;
-
-	if (CVrProjectionManager::IsMultiResEnabledStatic())
-		CVrProjectionManager::Instance()->GetProjectionSize(screenWidth, screenHeight, gridWidth, gridHeight);
 	
 	bool bSeparateCullingPass = tiledLights->IsSeparateVolumeListGen();
 	
@@ -75,23 +70,22 @@ void CTiledShadingStage::Execute()
 #if defined(FEATURE_SVO_GI)
 	if (CSvoRenderer::GetInstance()->IsActive())
 	{
-		int nModeGI = CSvoRenderer::GetInstance()->GetIntegratioMode();
+		bool bSpecularTargetIsReady = false;
+		int nModeGI = CSvoRenderer::GetInstance()->GetIntegratioMode(bSpecularTargetIsReady);
 
 		if (nModeGI == 0 && CSvoRenderer::GetInstance()->GetUseLightProbes())
 		{
 			// AO modulates diffuse and specular
 			rtFlags |= g_HWSR_MaskBit[HWSR_CUBEMAP0];
 		}
-		else if (nModeGI <= 1)
+		else 
 		{
-			// GI replaces diffuse and modulates specular
+			// GI replaces diffuse
 			rtFlags |= g_HWSR_MaskBit[HWSR_DECAL_TEXGEN_2D];
-		}
-		else if (nModeGI == 2)
-		{
-			// GI replaces diffuse and specular
-			rtFlags |= g_HWSR_MaskBit[HWSR_CUBEMAP0];
-			rtFlags |= g_HWSR_MaskBit[HWSR_DECAL_TEXGEN_2D];
+
+			// GI replaces specular
+			if (bSpecularTargetIsReady)
+				rtFlags |= g_HWSR_MaskBit[HWSR_CUBEMAP0];
 		}
 	}
 #endif
@@ -113,9 +107,7 @@ void CTiledShadingStage::Execute()
 	}
 #endif
 
-	static int s_prevTexAOColorBleed = pTexAOColorBleed->GetID();
-
-	if (m_passCullingShading.InputChanged(int(rtFlags >> 32), int(rtFlags), pTexCaustics->GetID(), pTexGiDiff->GetID()) || s_prevTexAOColorBleed != pTexAOColorBleed->GetID())
+	if (m_passCullingShading.InputChanged(rtFlags, pTexCaustics->GetID(), pTexGiDiff->GetID(), pTexAOColorBleed->GetID()))
 	{
 		static CCryNameTSCRC techTiledShading("TiledDeferredShading");
 		m_passCullingShading.SetTechnique(CShaderMan::s_shDeferredShading, techTiledShading, rtFlags);
@@ -147,7 +139,6 @@ void CTiledShadingStage::Execute()
 		m_passCullingShading.SetTexture(20, tiledLights->GetDiffuseProbeAtlas());
 		m_passCullingShading.SetTexture(21, tiledLights->GetProjectedLightAtlas());
 
-		s_prevTexAOColorBleed = pTexAOColorBleed->GetID();
 		m_pTexGiDiff = pTexGiDiff;
 		m_pTexGiSpec = pTexGiSpec;
 	}
@@ -158,6 +149,12 @@ void CTiledShadingStage::Execute()
 	GetStdGraphicsPipeline().GeneratePerViewConstantBuffer(viewInfo, viewInfoCount, m_pPerViewConstantBuffer,&viewport);
 	m_passCullingShading.SetInlineConstantBuffer(eConstantBufferShaderSlot_PerView, m_pPerViewConstantBuffer);
 
+	if (CVrProjectionManager::IsMultiResEnabledStatic())
+	{
+		auto constantBuffer = CVrProjectionManager::Instance()->GetProjectionConstantBuffer(screenWidth, screenHeight);
+		m_passCullingShading.SetInlineConstantBuffer(eConstantBufferShaderSlot_VrProjection, constantBuffer);
+	}
+	
 	m_passCullingShading.BeginConstantUpdate();
 	{
 		const auto &projMatrix = viewInfo[0].projMatrix;
@@ -205,12 +202,6 @@ void CTiledShadingStage::Execute()
 #endif
 		Vec4 ssdoNullParams(0, 0, 0, 0);
 		m_passCullingShading.SetConstant(ssdoParamsName, CRenderer::CV_r_ssdo ? ssdoParams : ssdoNullParams);
-	}
-
-	if (CVrProjectionManager::IsMultiResEnabledStatic())
-	{
-		auto constantBuffer = CVrProjectionManager::Instance()->GetProjectionConstantBuffer(screenWidth, screenHeight);
-		m_passCullingShading.SetInlineConstantBuffer(eConstantBufferShaderSlot_VrProjection, constantBuffer);
 	}
 
 	m_passCullingShading.SetDispatchSize(

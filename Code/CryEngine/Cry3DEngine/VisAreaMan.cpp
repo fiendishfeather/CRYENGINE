@@ -1196,7 +1196,7 @@ int __cdecl CVisAreaManager__CmpDistToPortal(const void* v1, const void* v2)
 void CVisAreaManager::MakeActiveEntransePortalsList(const CCamera* pCamera, PodArray<CVisArea*>& lstActiveEntransePortals, CVisArea* pThisPortal, const SRenderingPassInfo& passInfo)
 {
 	lstActiveEntransePortals.Clear();
-	float fZoomFactor = pCamera ? (0.2f + 0.8f * (RAD2DEG(pCamera->GetFov()) / 90.f)) : 1.f;
+	float fZoomFactor = passInfo.GetZoomFactor();
 
 	for (int nPortalId = 0; nPortalId < m_lstPortals.Count(); nPortalId++)
 	{
@@ -1317,8 +1317,7 @@ void CVisAreaManager::DrawOcclusionAreasIntoCBuffer(const SRenderingPassInfo& pa
 	m_lstActiveOcclVolumes.Clear();
 	m_lstIndoorActiveOcclVolumes.Clear();
 
-	float fZoomFactor = 0.2f + 0.8f * (RAD2DEG(passInfo.GetCamera().GetFov()) / 90.f);
-	float fDistRatio = GetFloatCVar(e_OcclusionVolumesViewDistRatio) / fZoomFactor;
+	float fDistRatio = GetFloatCVar(e_OcclusionVolumesViewDistRatio) * passInfo.GetInverseZoomFactor();
 
 	if (GetCVars()->e_OcclusionVolumes)
 		for (int i = 0; i < m_lstOcclAreas.Count(); i++)
@@ -1527,7 +1526,7 @@ void CVisAreaManager::PrecacheLevel(bool bPrecacheAllVisAreas, Vec3* pPrecachePo
 			cam.SetFrustum(GetRenderer()->GetOverlayWidth(), GetRenderer()->GetOverlayHeight(), gf_PI / 2, cam.GetNearPlane(), cam.GetFarPlane());
 			//	Get3DEngine()->SetupCamera(cam);
 
-			GetRenderer()->BeginFrame(0);
+			GetRenderer()->BeginFrame({});
 			Get3DEngine()->RenderWorld(SHDF_ZPASS | SHDF_ALLOWHDR | SHDF_ALLOWPOSTPROCESS | SHDF_ALLOW_WATER | SHDF_ALLOW_AO, SRenderingPassInfo::CreateGeneralPassRenderingInfo(cam), "PrecacheVisAreas");
 			GetRenderer()->RenderDebug();
 			GetRenderer()->EndFrame();
@@ -1556,7 +1555,7 @@ void CVisAreaManager::PrecacheLevel(bool bPrecacheAllVisAreas, Vec3* pPrecachePo
 			cam.SetPosition(pPrecachePoints[p]);
 			cam.SetFrustum(GetRenderer()->GetOverlayWidth(), GetRenderer()->GetOverlayHeight(), gf_PI / 2, cam.GetNearPlane(), cam.GetFarPlane());
 
-			GetRenderer()->BeginFrame(0);
+			GetRenderer()->BeginFrame({});
 			Get3DEngine()->RenderWorld(SHDF_ZPASS | SHDF_ALLOWHDR | SHDF_ALLOWPOSTPROCESS | SHDF_ALLOW_WATER | SHDF_ALLOW_AO, SRenderingPassInfo::CreateGeneralPassRenderingInfo(cam), "PrecacheOutdoor");
 			GetRenderer()->RenderDebug();
 			GetRenderer()->EndFrame();

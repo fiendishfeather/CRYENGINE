@@ -1016,8 +1016,6 @@ float CAttachmentManager::GetExtent(EGeomForm eForm)
 
 void CAttachmentManager::GetRandomPoints(Array<PosNorm> points, CRndGen& seed, EGeomForm eForm) const
 {
-	points.fill(ZERO);
-
 	CGeomExtent const& ext = m_Extents[eForm];
 	for (auto part : ext.RandomPartsAliasSum(points, seed))
 	{
@@ -1655,15 +1653,18 @@ void CAttachmentManager::UpdateLocationsExecuteUnsafe(Skeleton::CPoseData& rPose
 
 uint32 CAttachmentManager::RemoveAllAttachments()
 {
-	uint32 counter = GetAttachmentCount();
+	const uint32 loadingFlags = CA_SkipSkelRecreation | CA_ImmediateMode | (m_pSkelInstance->m_CharEditMode ? CA_CharEditModel : 0);
+
+	const uint32 counter = GetAttachmentCount();
 	for (uint32 i = 0; i < counter; i++)
 	{
-		m_arrAttachments[i]->ClearBinding(CA_SkipSkelRecreation);
+		m_arrAttachments[i]->ClearBinding(loadingFlags);
 	}
 	for (uint32 i = counter; i > 0; i--)
 	{
-		RemoveAttachmentByIndex(i - 1);
+		RemoveAttachmentByIndex(i - 1, loadingFlags);
 	}
+
 	return 1;
 }
 

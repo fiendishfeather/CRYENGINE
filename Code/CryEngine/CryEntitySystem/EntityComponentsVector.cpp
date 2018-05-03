@@ -4,7 +4,15 @@
 #include "EntityComponentsVector.h"
 #include "Entity.h"
 
+SEntityComponentRecord::~SEntityComponentRecord()
+{
+	Shutdown();
+}
+
 void SEntityComponentRecord::Shutdown()
 {
-	static_cast<CEntity*>(pComponent->GetEntity())->ShutDownComponent(*this);
+	if (pComponent != nullptr)
+	{
+		static_cast<CEntity*>(pComponent->GetEntity())->ShutDownComponent(*this);
+	}
 }

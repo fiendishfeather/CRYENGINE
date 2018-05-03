@@ -12,6 +12,9 @@ namespace Cry
 	{
 		class CLineConstraintComponent
 			: public IEntityComponent
+#ifndef RELEASE
+			, public IEntityComponentPreviewer
+#endif
 		{
 		protected:
 			friend CPlugin_CryDefaultEntities;
@@ -25,6 +28,15 @@ namespace Cry
 
 			virtual void OnShutDown() final;
 			// ~IEntityComponent
+
+#ifndef RELEASE
+			// IEntityComponentPreviewer
+			virtual IEntityComponentPreviewer* GetPreviewer() final { return this; }
+
+			virtual void SerializeProperties(Serialization::IArchive& archive) final {}
+			virtual void Render(const IEntity& entity, const IEntityComponent& component, SEntityPreviewContext &context) const final;
+			// ~IEntityComponentPreviewer
+#endif
 
 		public:
 			virtual ~CLineConstraintComponent() = default;
@@ -107,6 +119,7 @@ namespace Cry
 					constraint.qframe[0] = constraint.qframe[1] = Quat(slotTransform) * Quat::CreateRotationV0V1(Vec3(1, 0, 0), m_axis);
 					constraint.xlimits[0] = m_limitMin;
 					constraint.xlimits[1] = m_limitMax;
+					constraint.yzlimits[0] = constraint.yzlimits[1] = 0;
 					constraint.damping = m_damping;
 
 					if (!bAllowRotation)

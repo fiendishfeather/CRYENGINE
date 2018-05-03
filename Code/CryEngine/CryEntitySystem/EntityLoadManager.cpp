@@ -156,13 +156,18 @@ bool CEntityLoadManager::ParseEntities(XmlNodeRef& entitiesNode, bool bIsLoading
 				INDENT_LOG_DURING_SCOPE(true, "Parsing entity '%s'", entityNode->getAttr("Name"));
 
 				loadParameterStorage.emplace_back();
+
 				if (!ExtractEntityLoadParams(entityNode, loadParameterStorage.back(), segmentOffset, true))
 				{
+					loadParameterStorage.pop_back();
+
 					string sName = entityNode->getAttr("Name");
 					EntityWarning("CEntityLoadManager::ParseEntities : Failed when parsing entity \'%s\'", sName.empty() ? "Unknown" : sName.c_str());
 				}
-
-				requiredAllocationSize += loadParameterStorage.back().allocationSize;
+				else
+				{
+					requiredAllocationSize += loadParameterStorage.back().allocationSize;
+				}
 			}
 		}
 

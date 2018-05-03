@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "Renderer.h"
+
 #if CRY_PLATFORM_DURANGO || CRY_PLATFORM_ORBIS
 	#define SUPPORTS_INPLACE_TEXTURE_STREAMING
 #endif
@@ -119,6 +121,9 @@ public:
 	static ICVar*       CV_r_ShaderTarget;
 	static int          ShaderTargetFlag;
 #endif
+
+	static ICVar*       CV_r_VkShaderCompiler;
+
 	//  static int CV_r_envcmwrite;
 	static int CV_r_shadersremotecompiler;
 	static int CV_r_shadersasynccompiling;
@@ -143,9 +148,6 @@ public:
 	static int CV_r_TexturesStreamingDebugMinSize;
 	static int CV_r_TexturesStreamingDebugMinMip;
 	static int CV_r_enableAltTab;
-	static int CV_r_StereoDevice;
-	static int CV_r_StereoMode;
-	static int CV_r_StereoOutput;
 	static int CV_r_StereoFlipEyes;
 	static int CV_r_StereoEnableMgpu;
 	static int CV_r_DynTexSourceSharedRTWidth;

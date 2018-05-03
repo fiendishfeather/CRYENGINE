@@ -1,12 +1,5 @@
 // Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 
-// -------------------------------------------------------------------------
-//  Created:     23/09/2014 by Filipe amim
-//  Description:
-// -------------------------------------------------------------------------
-//
-////////////////////////////////////////////////////////////////////////////
-
 #include "StdAfx.h"
 #include "ParticleEffect.h"
 #include "ParticleSystem.h"
@@ -64,8 +57,21 @@ void CParticleEffect::Compile()
 		for (auto feature : component->MainPreUpdate)
 			MainPreUpdate.push_back( {component, feature} );
 	}
+
+	m_timings = {};
 	for (auto& component : m_components)
+	{
 		component->FinalizeCompile();
+		if (!component->GetParentComponent())
+		{
+			component->UpdateTimings();
+			const STimingParams& timings = component->ComponentParams();
+			SetMax(m_timings.m_maxParticleLife, timings.m_maxParticleLife);
+			SetMax(m_timings.m_stableTime, timings.m_stableTime);
+			SetMax(m_timings.m_equilibriumTime, timings.m_equilibriumTime);
+			SetMax(m_timings.m_maxTotalLIfe, timings.m_maxTotalLIfe);
+		}
+	}
 
 	m_dirty = false;
 }
@@ -142,22 +148,6 @@ uint CParticleEffect::GetNumRenderObjectIds() const
 	return m_numRenderObjects;
 }
 
-float CParticleEffect::GetEquilibriumTime() const
-{
-	float maxEqTime = 0.0f;
-	for (const auto& pComponent : m_components)
-	{
-		// Iterate top-level components
-		auto const& params = pComponent->GetComponentParams();
-		if (pComponent->IsEnabled() && !pComponent->GetParentComponent() && params.IsImmortal())
-		{
-			float eqTime = pComponent->GetEquilibriumTime(Range(params.m_emitterLifeTime.start));
-			maxEqTime = max(maxEqTime, eqTime);
-		}
-	}
-	return maxEqTime;
-}
-
 string CParticleEffect::GetShortName() const
 {
 	string name = m_name;
@@ -194,6 +184,10 @@ void CParticleEffect::Serialize(Serialization::IArchive& ar)
 	ar(documentVersion, "Version", "");
 	SSerializationContext documentContext(documentVersion);
 	Serialization::SContext context(ar, &documentContext);
+
+	if (documentVersion < gMinimumVersion || documentVersion > gCurrentVersion)
+		gEnv->pLog->LogError("Particle effect %s has unsupported version %d. Valid versions are %d to %d. Some values may be incorrectly read.", 
+			GetName(), documentVersion, gMinimumVersion, gCurrentVersion);
 
 	ar(*m_pAttributes, "Attributes");
 

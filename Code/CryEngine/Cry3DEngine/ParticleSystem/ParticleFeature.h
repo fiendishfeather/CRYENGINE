@@ -16,6 +16,7 @@ namespace pfx2
 {
 
 class CParticleComponentRuntime;
+struct SInstance;
 
 class CParticleFeature : public IParticleFeature
 {
@@ -35,6 +36,10 @@ public:
 	const char*                 GetResourceName(uint resourceId) const override   { return nullptr; }
 	// ~IParticleFeature
 
+	// Parameters
+	static bool HasConnector()   { return false; }
+	static uint DefaultForType() { return 0; }
+
 	// Initialization
 	virtual CParticleFeature* ResolveDependency(CParticleComponent* pComponent)                         { return this; }
 	virtual void              AddToComponent(CParticleComponent* pComponent, SComponentParams* pParams) {}
@@ -43,6 +48,10 @@ public:
 
 	// Runtime and instance initialization
 	virtual void MainPreUpdate(CParticleComponentRuntime* pComponentRuntime) {}
+
+	virtual void AddSubInstances(const SUpdateContext& context) {}
+
+	virtual void CullSubInstances(const SUpdateContext& context, TVarArray<SInstance>& instances) {}
 
 	virtual void InitSubInstances(const SUpdateContext& context, SUpdateRange instanceRange) {}
 
@@ -53,11 +62,11 @@ public:
 	// Particle initialization
 	virtual void SpawnParticles(const SUpdateContext& context, TDynArray<SSpawnEntry>& spawnEntries) {}
 
+	virtual void PreInitParticles(const SUpdateContext& context) {}
+
 	virtual void InitParticles(const SUpdateContext& context) {}
 
 	virtual void PostInitParticles(const SUpdateContext& context) {}
-
-	virtual void KillParticles(const SUpdateContext& context, TConstArray<TParticleId> particleIds) {}
 
 	virtual void DestroyParticles(const SUpdateContext& context) {}
 
@@ -95,15 +104,17 @@ struct SFeatureDispatchers
 {
 	TFeatureDispatcher<CParticleComponentRuntime*> MainPreUpdate { &CParticleFeature::MainPreUpdate };
 
+	TFeatureDispatcher<const SUpdateContext&> AddSubInstances { &CParticleFeature::AddSubInstances };
+	TFeatureDispatcher<const SUpdateContext&, TVarArray<SInstance>&> CullSubInstances { &CParticleFeature::CullSubInstances };
 	TFeatureDispatcher<const SUpdateContext&, SUpdateRange> InitSubInstances { &CParticleFeature::InitSubInstances };
 	TFeatureDispatcher<const SUpdateContext&, TDynArray<SSpawnEntry>&> SpawnParticles { &CParticleFeature::SpawnParticles };
 
 	TFeatureDispatcher<const SUpdateContext&, TConstArray<float>, TVarArray<float>> GetSpatialExtents { &CParticleFeature::GetSpatialExtents };
 	TFeatureDispatcher<const SUpdateContext&, TParticleId, Vec3&> GetEmitOffset { &CParticleFeature::GetEmitOffset };
 
+	TFeatureDispatcher<const SUpdateContext&> PreInitParticles { &CParticleFeature::PreInitParticles };
 	TFeatureDispatcher<const SUpdateContext&> InitParticles { &CParticleFeature::InitParticles };
 	TFeatureDispatcher<const SUpdateContext&> PostInitParticles { &CParticleFeature::PostInitParticles };
-	TFeatureDispatcher<const SUpdateContext&, TConstArray<TParticleId>> KillParticles { &CParticleFeature::KillParticles };
 	TFeatureDispatcher<const SUpdateContext&> DestroyParticles { &CParticleFeature::DestroyParticles };
 
 	TFeatureDispatcher<const SUpdateContext&> PreUpdateParticles { &CParticleFeature::PreUpdateParticles };
@@ -145,31 +156,46 @@ static const ColorB colorComponent  = HexToColor(0x80c0c0);
   struct SFeatureParams; \
   virtual const SParticleFeatureParams& GetFeatureParams() const override;
 
-#define CRY_PFX2_IMPLEMENT_FEATURE_INTERNAL(BaseType, Type, GroupName, FeatureName, Color, UseConnector, DefaultForType) \
+// Implement a Feature that can be added to Components
+#define CRY_PFX2_IMPLEMENT_COMPONENT_FEATURE(BaseType, Type, GroupName, FeatureName, Color)                              \
   struct Type::SFeatureParams: SParticleFeatureParams { SFeatureParams() {                                               \
     m_fullName = GroupName ": " FeatureName;                                                                             \
     m_groupName = GroupName;                                                                                             \
     m_featureName = FeatureName;                                                                                         \
     m_color = Color;                                                                                                     \
     m_pFactory = []() -> IParticleFeature* { return new Type(); };                                                       \
-    m_hasComponentConnector = UseConnector;                                                                              \
-    m_defaultForType = DefaultForType;                                                                                   \
+    m_hasComponentConnector = Type::HasConnector();                                                                      \
+    m_defaultForType = Type::DefaultForType();                                                                           \
   } };                                                                                                                   \
   const SParticleFeatureParams& Type::GetFeatureParams() const { static Type::SFeatureParams params; return params; }    \
   static bool sInit ## Type = CParticleFeature::RegisterFeature(Type::SFeatureParams());                                 \
   SERIALIZATION_CLASS_NAME(BaseType, Type, GroupName FeatureName, GroupName FeatureName);                                \
+
+// Implement a Feature that can be added to Components and Emitters
+#define CRY_PFX2_IMPLEMENT_FEATURE(BaseType, Type, GroupName, FeatureName, Color)                                        \
+  CRY_PFX2_IMPLEMENT_COMPONENT_FEATURE(BaseType, Type, GroupName, FeatureName, Color)                                    \
   SERIALIZATION_CLASS_NAME(IParticleFeature, Type, GroupName FeatureName, GroupName ":" FeatureName);                    \
 
-#define CRY_PFX2_IMPLEMENT_FEATURE(BaseType, Type, GroupName, FeatureName, Color) \
-  CRY_PFX2_IMPLEMENT_FEATURE_INTERNAL(BaseType, Type, GroupName, FeatureName, Color, false, 0)
-
-#define CRY_PFX2_IMPLEMENT_FEATURE_DEFAULT(BaseType, Type, GroupName, FeatureName, Color, ForType) \
-  CRY_PFX2_IMPLEMENT_FEATURE_INTERNAL(BaseType, Type, GroupName, FeatureName, Color, false, ForType)
-
-#define CRY_PFX2_IMPLEMENT_FEATURE_WITH_CONNECTOR(BaseType, Type, GroupName, FeatureName, Color) \
-  CRY_PFX2_IMPLEMENT_FEATURE_INTERNAL(BaseType, Type, GroupName, FeatureName, Color, true, 0)
-
+// Implement a legacy class name for serializing a Feature
 #define CRY_PFX2_LEGACY_FEATURE(Type, GroupName, FeatureName) \
 	SERIALIZATION_CLASS_NAME(CParticleFeature, Type, GroupName FeatureName, GroupName FeatureName);
 
+}
+
+namespace yasli
+{
+	// Copied and specialized from Serialization library to provide error message for nonexistent features
+	template<> inline
+	pfx2::CParticleFeature* ClassFactory<pfx2::CParticleFeature>::create(cstr registeredName) const
+	{
+		if (!registeredName || !*registeredName)
+			return nullptr;
+		auto it = typeToCreatorMap_.find(registeredName);
+		if (it == typeToCreatorMap_.end())
+		{
+			gEnv->pLog->LogError("Particle effect has nonexistent feature %s", registeredName);
+			return nullptr;
+		}
+		return it->second->create();
+	}
 }

@@ -1,5 +1,4 @@
-// CRYENGINE Source Code File
-// Copyright 2001-2015 Crytek GmbH. All rights reserved.
+// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "Common.cfi"
 #include "ModificatorVT.cfi"
@@ -34,7 +33,7 @@ struct a2v
 
 struct v2f_hdr
 {
-  float4 Position   : POSITION;  //in projection space
+  float4 Position   : SV_POSITION;  //in projection space
 
 #if !%NO_DAY_SKY_GRADIENT && !%NO_MOON
   float4 packedTC   : TEXCOORDN;
@@ -240,7 +239,12 @@ pixout_gbuffer SkyZPS(v2fZ IN)
 	
 	MaterialAttribsCommon attribs = MaterialAttribsDefault();
 	attribs.Albedo = 0;  // Output black albedo for emissive surface
+	
+#if %_RT_SAMPLE0
+	EncodeMicroGBuffer( attribs, OUT.GBufferA, IN.Position.xy );
+#else
 	EncodeGBuffer( attribs, OUT.GBufferA, OUT.GBufferB, OUT.GBufferC );
+#endif
 
   return OUT;
 }

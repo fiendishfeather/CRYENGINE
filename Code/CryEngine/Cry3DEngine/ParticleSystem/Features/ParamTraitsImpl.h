@@ -57,7 +57,7 @@ bool TValue<T, TTraits>::Serialize(Serialization::IArchive& ar, const char* name
 				{
 					ar(Serialization::Range(m_value, HardMin(), HardMax()), "value", "^");
 					if (m_value == Default())
-						m_value = clamp(T(), HardMin(), HardMax());
+						m_value = Enabled();
 				}
 				else
 				{
@@ -71,13 +71,10 @@ bool TValue<T, TTraits>::Serialize(Serialization::IArchive& ar, const char* name
 		if (!ar(EnabledValue {v}, name, label))
 			return false;
 	}
-	else if (TTraits::HideDefault() && ar.isOutput() && v == Default())
-		return true;
 	else
 	{
 		if (!ar(Serialization::Range(v, HardMin(), HardMax()), name, label))
-			if (ar.isInput())
-				v = Default();
+			return false;
 	}
 	if (ar.isInput())
 		Set(v);
