@@ -491,8 +491,20 @@ bool CD3D9Renderer::FX_DrawToRenderTarget(
 			//Matrix34 RefMatrix34 = CreateReflectionMat3(Pl);
 			//Matrix34 matMir=RefMatrix34*tmp_cam.GetMatrix();
 			//tmp_cam.SetMatrix(matMir);
-			assert(Tex);
-			tmp_cam.SetFrustum((int)(Tex->GetWidth() * tmp_cam.GetProjRatio()), Tex->GetHeight(), tmp_cam.GetFov(), fMinDist, fMaxDist);       //tmp_cam.GetFarPlane());
+			assert(Tex); 
+			if (Tex!=NULL)
+			{
+				tmp_cam.SetFrustum((int)(Tex->GetWidth() * tmp_cam.GetProjRatio()), Tex->GetHeight(), tmp_cam.GetFov(), fMinDist, fMaxDist);       //tmp_cam.GetFarPlane());
+			}
+			else if(Tex != NULL)
+			{
+				PREFAST_ASSUME(pEnvTex);
+				tmp_cam.SetFrustum((int)(pEnvTex->m_pTex->GetWidth() * tmp_cam.GetProjRatio()), pEnvTex->m_pTex->GetHeight(), tmp_cam.GetFov(), fMinDist, fMaxDist);
+			}
+			else
+			{
+				return false;
+			}
 			bMirror       = true;
 			bUseClipPlane = true;
 		}
