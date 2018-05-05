@@ -6,7 +6,8 @@
 #include "Common/ComputeRenderPass.h"
 #include "Common/FullscreenPass.h"
 
-constexpr uint32 MaxNumTileLights = 255;
+//constexpr uint32 MaxNumTileLights = 255;
+constexpr uint32 MaxNumTileLights = 1024;
 
 // Sun area light parameters (same as in standard deferred shading)
 constexpr float TiledShading_SunDistance = 10000.0f;

@@ -496,7 +496,7 @@ bool CD3D9Renderer::FX_DrawToRenderTarget(
 			{
 				tmp_cam.SetFrustum((int)(Tex->GetWidth() * tmp_cam.GetProjRatio()), Tex->GetHeight(), tmp_cam.GetFov(), fMinDist, fMaxDist);       //tmp_cam.GetFarPlane());
 			}
-			else if(Tex != NULL)
+			else if(pEnvTex != NULL)
 			{
 				PREFAST_ASSUME(pEnvTex);
 				tmp_cam.SetFrustum((int)(pEnvTex->m_pTex->GetWidth() * tmp_cam.GetProjRatio()), pEnvTex->m_pTex->GetHeight(), tmp_cam.GetFov(), fMinDist, fMaxDist);

@@ -134,7 +134,8 @@ const float TANGENT30_2 = 0.57735026918962576450914878050196f * 2;   // 2*tan(30
 #define MAX_PREDICTION_ZONES                  MAX_STREAM_PREDICTION_ZONES
 
 #define MAX_SHADOWMAP_FRUSTUMS                1024
-#define MAX_DEFERRED_LIGHTS                   256
+//#define MAX_DEFERRED_LIGHTS                   256
+#define MAX_DEFERRED_LIGHTS                   1024
 
 #define TEMP_REND_OBJECTS_POOL                (2048)
 
