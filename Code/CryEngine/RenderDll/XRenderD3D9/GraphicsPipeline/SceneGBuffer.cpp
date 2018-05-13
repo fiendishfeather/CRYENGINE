@@ -112,7 +112,54 @@ bool CSceneGBufferStage::CreatePipelineState(const SGraphicsPipelineStateDescrip
 		if ((objectFlags & FOB_DECAL) || (objectFlags & FOB_TERRAIN_LAYER) || (((CShader*)desc.shaderItem.m_pShader)->GetFlags() & EF_DECAL))
 		{
 			psoDesc.m_RenderState = (psoDesc.m_RenderState & ~(GS_BLEND_MASK | GS_DEPTHWRITE | GS_DEPTHFUNC_MASK | GS_STENCIL));
-			psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+			
+			uint32 pomMask = 134217728; 
+			uint64 vertColMask = 137438953472;
+
+			if (((CShader*)desc.shaderItem.m_pShader)->GetFlags() & EF_DECAL)
+			{
+				if (((CShader*)desc.shaderItem.m_pShader)->GetGenerationMask() & pomMask)
+				{
+					//if (desc.shaderItem.m_pShaderResources->GetTexture(2) == NULL)
+					if (desc.shaderItem.m_pShaderResources->GetAlphaRef() > 0)
+					{
+
+						psoDesc.m_RenderStateSlot1 = psoDesc.m_RenderState;
+						psoDesc.m_RenderStateSlot2 = psoDesc.m_RenderState;
+						psoDesc.m_RenderStateSlot1 |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_ZERO | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						psoDesc.m_RenderStateSlot2 |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_SRCCOL | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						psoDesc.m_bCustomTargetBlends = true;
+						psoDesc.m_bCustomDecalType1 = true;
+
+						//psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+
+					}
+					else
+					{
+						//psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						psoDesc.m_bCustomDecalType2 = true;
+					}
+				}
+				else if (((CShader*)desc.shaderItem.m_pShader)->GetGenerationMask() & vertColMask)
+				{
+					psoDesc.m_RenderStateSlot2 = psoDesc.m_RenderState;
+					psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+					psoDesc.m_RenderStateSlot2 |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_NONE;
+					psoDesc.m_bCustomDecalType3 = true;
+				}
+				else
+				{
+					psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+					psoDesc.m_bCustomDecalType2 = true;
+				} 
+			}
+			else
+			{
+				psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+			}
+			
 
 			psoDesc.m_ShaderFlags_RT |= g_HWSR_MaskBit[HWSR_ALPHABLEND];
 
@@ -133,6 +180,11 @@ bool CSceneGBufferStage::CreatePipelineState(const SGraphicsPipelineStateDescrip
 
 	{
 		psoDesc.m_RenderState = ReverseDepthHelper::ConvertDepthFunc(psoDesc.m_RenderState);
+		if (psoDesc.m_bCustomTargetBlends)
+		{
+			psoDesc.m_RenderStateSlot1 = ReverseDepthHelper::ConvertDepthFunc(psoDesc.m_RenderStateSlot1);
+			psoDesc.m_RenderStateSlot2 = ReverseDepthHelper::ConvertDepthFunc(psoDesc.m_RenderStateSlot2);
+		}
 	}
 	psoDesc.m_pRenderPass = pSceneRenderPass->GetRenderPass();
 

@@ -66,6 +66,10 @@ void CDeviceGraphicsPSODesc::InitWithDefaults()
 	m_PrimitiveType = eptTriangleList;
 	m_bDepthClip = true;
 	m_bDynamicDepthBias = false;
+	m_bCustomTargetBlends = false;
+	m_bCustomDecalType1 = false;
+	m_bCustomDecalType2 = false;
+	m_bCustomDecalType3 = false;
 }
 
 CDeviceGraphicsPSODesc& CDeviceGraphicsPSODesc::operator=(const CDeviceGraphicsPSODesc& other)
@@ -114,6 +118,8 @@ void CDeviceGraphicsPSODesc::FillDescs(D3D11_RASTERIZER_DESC& rasterizerDesc, D3
 	// 00000000 11100000 00000000 00000000 BLENDOP
 	// 00001110 00000000 00000000 00000000 BLENDOPALPHA
 	const uint32 renderState = m_RenderState;
+	const uint32 renderStateSlot1 = m_RenderStateSlot1;
+	const uint32 renderStateSlot2 = m_RenderStateSlot2;
 
 	ZeroMemory(&rasterizerDesc, sizeof(D3D11_RASTERIZER_DESC));
 	ZeroMemory(&blendDesc, sizeof(D3D11_BLEND_DESC));
@@ -136,6 +142,12 @@ void CDeviceGraphicsPSODesc::FillDescs(D3D11_RASTERIZER_DESC& rasterizerDesc, D3
 	{
 		const bool bBlendEnable = (renderState & GS_BLEND_MASK) != 0;
 		blendDesc.RenderTarget[0].BlendEnable = bBlendEnable;
+		if (m_bCustomTargetBlends)
+		{
+			blendDesc.RenderTarget[1].BlendEnable = bBlendEnable;
+			blendDesc.RenderTarget[2].BlendEnable = bBlendEnable;
+		}
+
 
 		struct BlendFactors
 		{
@@ -203,12 +215,74 @@ void CDeviceGraphicsPSODesc::FillDescs(D3D11_RASTERIZER_DESC& rasterizerDesc, D3
 				blendDesc.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
 				blendDesc.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
 			}
+			if (m_bCustomTargetBlends)
+			{
+				blendDesc.RenderTarget[0].SrcBlend = SrcBlendFactors[(renderState & GS_BLSRC_MASK) >> GS_BLSRC_SHIFT].BlendColor;
+				blendDesc.RenderTarget[0].SrcBlendAlpha = SrcBlendFactors[(GS_BLSRC_SRCALPHA & GS_BLSRC_MASK) >> GS_BLSRC_SHIFT].BlendAlpha;
+				blendDesc.RenderTarget[0].DestBlend = DstBlendFactors[(renderState & GS_BLDST_MASK) >> GS_BLDST_SHIFT].BlendColor;
+				blendDesc.RenderTarget[0].DestBlendAlpha = DstBlendFactors[(GS_BLDST_ONEMINUSSRCALPHA & GS_BLDST_MASK) >> GS_BLDST_SHIFT].BlendAlpha;
+
+				blendDesc.RenderTarget[0].BlendOp = BlendOp[(renderState & GS_BLEND_OP_MASK) >> GS_BLEND_OP_SHIFT];
+				blendDesc.RenderTarget[0].BlendOpAlpha = BlendOp[(renderState & GS_BLALPHA_MASK) >> GS_BLALPHA_SHIFT];
+			}
+			if (m_bCustomDecalType2)
+			{
+				blendDesc.RenderTarget[0].SrcBlend = SrcBlendFactors[(renderState & GS_BLSRC_MASK) >> GS_BLSRC_SHIFT].BlendColor;
+				blendDesc.RenderTarget[0].SrcBlendAlpha = SrcBlendFactors[(GS_BLSRC_ONE & GS_BLSRC_MASK) >> GS_BLSRC_SHIFT].BlendAlpha;
+				blendDesc.RenderTarget[0].DestBlend = DstBlendFactors[(renderState & GS_BLDST_MASK) >> GS_BLDST_SHIFT].BlendColor;
+				blendDesc.RenderTarget[0].DestBlendAlpha = DstBlendFactors[(GS_BLDST_ONEMINUSSRCALPHA & GS_BLDST_MASK) >> GS_BLDST_SHIFT].BlendAlpha;
+
+				blendDesc.RenderTarget[0].BlendOp = BlendOp[(renderState & GS_BLEND_OP_MASK) >> GS_BLEND_OP_SHIFT];
+				blendDesc.RenderTarget[0].BlendOpAlpha = BlendOp[(renderState & GS_BLALPHA_MASK) >> GS_BLALPHA_SHIFT];
+			}
 		}
 
 		// Copy blend state to support independent blend
 		for (size_t i = 0; i < CD3D9Renderer::RT_STACK_WIDTH; ++i)
-		{
+		{ 
 			blendDesc.RenderTarget[i] = blendDesc.RenderTarget[0];
+
+			if (m_bCustomTargetBlends && bBlendEnable)
+			{
+				//sceneDiffuse target
+				if (i == 1)
+				{
+					blendDesc.RenderTarget[i].SrcBlend = SrcBlendFactors[(renderStateSlot1 & GS_BLSRC_MASK) >> GS_BLSRC_SHIFT].BlendColor;
+					blendDesc.RenderTarget[i].SrcBlendAlpha = SrcBlendFactors[(GS_BLSRC_ZERO & GS_BLSRC_MASK) >> GS_BLSRC_SHIFT].BlendAlpha;
+					blendDesc.RenderTarget[i].DestBlend = DstBlendFactors[(renderStateSlot1 & GS_BLDST_MASK) >> GS_BLDST_SHIFT].BlendColor;
+					blendDesc.RenderTarget[i].DestBlendAlpha = DstBlendFactors[(GS_BLDST_ONE & GS_BLDST_MASK) >> GS_BLDST_SHIFT].BlendAlpha;
+
+					blendDesc.RenderTarget[i].BlendOp = BlendOp[(renderStateSlot1 & GS_BLEND_OP_MASK) >> GS_BLEND_OP_SHIFT];
+					blendDesc.RenderTarget[i].BlendOpAlpha = BlendOp[(renderStateSlot1 & GS_BLALPHA_MASK) >> GS_BLALPHA_SHIFT];
+
+					if ((renderStateSlot1 & GS_BLALPHA_MASK) == GS_BLALPHA_MIN)
+					{
+						blendDesc.RenderTarget[i].DestBlendAlpha = D3D11_BLEND_ONE;
+						blendDesc.RenderTarget[i].SrcBlendAlpha = D3D11_BLEND_ONE;
+					}
+				}
+				//sceneSpecular target
+				if (i == 2)
+				{
+					blendDesc.RenderTarget[i].SrcBlend = SrcBlendFactors[(renderStateSlot2 & GS_BLSRC_MASK) >> GS_BLSRC_SHIFT].BlendColor;
+					blendDesc.RenderTarget[i].SrcBlendAlpha = SrcBlendFactors[(GS_BLSRC_SRCALPHA & GS_BLSRC_MASK) >> GS_BLSRC_SHIFT].BlendAlpha;
+					blendDesc.RenderTarget[i].DestBlend = DstBlendFactors[(renderStateSlot2 & GS_BLDST_MASK) >> GS_BLDST_SHIFT].BlendColor;
+					blendDesc.RenderTarget[i].DestBlendAlpha = DstBlendFactors[(GS_BLDST_ONEMINUSSRCALPHA & GS_BLDST_MASK) >> GS_BLDST_SHIFT].BlendAlpha;
+
+					blendDesc.RenderTarget[i].BlendOp = BlendOp[(renderStateSlot2 & GS_BLEND_OP_MASK) >> GS_BLEND_OP_SHIFT];
+					blendDesc.RenderTarget[i].BlendOpAlpha = BlendOp[(renderStateSlot2 & GS_BLALPHA_MASK) >> GS_BLALPHA_SHIFT];
+
+					if ((renderStateSlot2 & GS_BLALPHA_MASK) == GS_BLALPHA_MIN)
+					{
+						blendDesc.RenderTarget[i].DestBlendAlpha = D3D11_BLEND_ONE;
+						blendDesc.RenderTarget[i].SrcBlendAlpha = D3D11_BLEND_ONE;
+					}
+				}  
+				if (i == 3)
+				{
+					blendDesc.RenderTarget[i].BlendEnable = false;
+				}
+			} 
 
 			// Dual source color blend cannot be enabled for any RT slot but 0
 			if (!bBlendAllowAllTargets && i > 0)
@@ -225,6 +299,13 @@ void CDeviceGraphicsPSODesc::FillDescs(D3D11_RASTERIZER_DESC& rasterizerDesc, D3
 			uint32 mask = 0xfffffff0 | (ColorMasks[(renderState & GS_COLMASK_MASK) >> GS_COLMASK_SHIFT][i]);
 			mask = (~mask) & 0xf;
 			blendDesc.RenderTarget[i].RenderTargetWriteMask = mask;
+
+			if (m_bCustomDecalType3 && (i==2))
+			{
+				mask = 0xfffffff0 | (ColorMasks[(renderStateSlot2 & GS_COLMASK_MASK) >> GS_COLMASK_SHIFT][i]);
+				mask = (~mask) & 0xf;
+				blendDesc.RenderTarget[i].RenderTargetWriteMask = 0;
+			}
 		}
 	}
 
