@@ -98,10 +98,10 @@ namespace Cry
 				Schematyc::Range<0, 100> m_densityOffset = 0.f;
 				Schematyc::Range<0, 100> m_nearCutoff = 0.f;
 				Schematyc::Range<0, 1, 0, 1, float> m_softEdges = 1.f;
-				Schematyc::Range<0, 100> m_heightFallOffDirLong = 0.f;
-				Schematyc::Range<0, 100> m_heightFallOffDirLati = 0.f;
-				Schematyc::Range<0, 100> m_heightFallOffShift = 0.f;
-				Schematyc::Range<0, 100> m_heightFallOffScale = 1.f;
+				Schematyc::Range<0, 360> m_heightFallOffDirLong = 0.f;
+				Schematyc::Range<0, 360> m_heightFallOffDirLati = 0.f;
+				Schematyc::Range<-100, 100> m_heightFallOffShift = 0.f;
+				Schematyc::Range<-100, 100> m_heightFallOffScale = 1.f;
 				Schematyc::Range<0, 30000> m_rampStart = 0.f;
 				Schematyc::Range<0, 30000> m_rampEnd = 50.f;
 				Schematyc::Range<0, 1, 0, 1, float> m_rampInfluence = 0.f;

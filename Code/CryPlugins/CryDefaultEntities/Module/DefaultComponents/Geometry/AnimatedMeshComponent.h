@@ -87,7 +87,8 @@ namespace Cry
 		protected:
 			CryCharAnimationParams m_animationParams;
 
-			Schematyc::CharacterFileName m_filePath;
+			//Schematyc::CharacterFileName m_filePath;
+			Schematyc::AnyModelFileName m_filePath;
 
 			Schematyc::LowLevelAnimationName m_defaultAnimation;
 			bool m_bLoopDefaultAnimation = false;
