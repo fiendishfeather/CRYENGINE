@@ -1938,6 +1938,7 @@ enum ERenderListID
 // SShader::Flags2
 // Additional Different useful flags
 
+#define EF2_DECAL2               0x2 //Decal with greyscale diffuse
 #define EF2_PREPR_SCANWATER      0x4
 #define EF2_NOCASTSHADOWS        0x8
 #define EF2_NODRAW               0x10

@@ -115,44 +115,60 @@ bool CSceneGBufferStage::CreatePipelineState(const SGraphicsPipelineStateDescrip
 			
 			uint32 pomMask = 134217728; 
 			uint64 vertColMask = 137438953472;
+			uint64 mtlFlagDecalType1 = 536870912; //2000 0000
+
 
 			if (((CShader*)desc.shaderItem.m_pShader)->GetFlags() & EF_DECAL)
-			{
+			{  
 				if (((CShader*)desc.shaderItem.m_pShader)->GetGenerationMask() & pomMask)
-				{
-					//if (desc.shaderItem.m_pShaderResources->GetTexture(2) == NULL)
-					if (desc.shaderItem.m_pShaderResources->GetAlphaRef() > 0)
+				{  
+					if (((CShader*)desc.shaderItem.m_pShader)->GetFlags2() & EF2_DECAL2)
 					{
+						//NEW - TYPE 1
+						psoDesc.m_bCustomTargetBlends = true; 
 
-						psoDesc.m_RenderStateSlot1 = psoDesc.m_RenderState;
-						psoDesc.m_RenderStateSlot2 = psoDesc.m_RenderState;
-						psoDesc.m_RenderStateSlot1 |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_ZERO | GS_NOCOLMASK_GBUFFER_OVERLAY;
-						psoDesc.m_RenderStateSlot2 |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_SRCCOL | GS_NOCOLMASK_GBUFFER_OVERLAY;
-						psoDesc.m_bCustomTargetBlends = true;
-						psoDesc.m_bCustomDecalType1 = true;
+						psoDesc.m_RenderStateIndependent[1] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_ZERO | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_SRCCOL | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
+						psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ZERO | GS_BLDST_ONE;
+						psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
 
-						//psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
 						psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						///////////// 
 
 					}
 					else
 					{
-						//psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+						//NEW - TYPE 2
+						psoDesc.m_bCustomTargetBlends = true;
+
 						psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
-						psoDesc.m_bCustomDecalType2 = true;
+						psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+						psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+						psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+						////////// 
 					}
 				}
 				else if (((CShader*)desc.shaderItem.m_pShader)->GetGenerationMask() & vertColMask)
 				{
-					psoDesc.m_RenderStateSlot2 = psoDesc.m_RenderState;
+					//NEW - TYPE 3
+					psoDesc.m_bCustomTargetBlends = true;
+
+					psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_RGBA;
+
 					psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
-					psoDesc.m_RenderStateSlot2 |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_NONE;
-					psoDesc.m_bCustomDecalType3 = true;
+					///////////// 
 				}
 				else
 				{
+					//NEW - TYPE 2
+					psoDesc.m_bCustomTargetBlends = true;
+
 					psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
-					psoDesc.m_bCustomDecalType2 = true;
+					psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+					psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+					psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+					////////// 
 				} 
 			}
 			else
@@ -182,8 +198,13 @@ bool CSceneGBufferStage::CreatePipelineState(const SGraphicsPipelineStateDescrip
 		psoDesc.m_RenderState = ReverseDepthHelper::ConvertDepthFunc(psoDesc.m_RenderState);
 		if (psoDesc.m_bCustomTargetBlends)
 		{
-			psoDesc.m_RenderStateSlot1 = ReverseDepthHelper::ConvertDepthFunc(psoDesc.m_RenderStateSlot1);
-			psoDesc.m_RenderStateSlot2 = ReverseDepthHelper::ConvertDepthFunc(psoDesc.m_RenderStateSlot2);
+			for (size_t i = 0; i < CD3D9Renderer::RT_STACK_WIDTH; i++)
+			{
+				if (psoDesc.m_RenderStateIndependent[i]!=0)
+				{
+					psoDesc.m_RenderStateIndependent[i] = ReverseDepthHelper::ConvertDepthFunc(psoDesc.m_RenderStateIndependent[i]);
+				} 
+			} 
 		}
 	}
 	psoDesc.m_pRenderPass = pSceneRenderPass->GetRenderPass();

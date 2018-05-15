@@ -557,6 +557,7 @@ void CParserBin::Init()
 	FX_REGISTER_TOKEN(SupportsDeferredShading);
 	FX_REGISTER_TOKEN(SupportsFullDeferredShading);
 	FX_REGISTER_TOKEN(Decal);
+	FX_REGISTER_TOKEN(Decal2);
 	FX_REGISTER_TOKEN(DecalNoDepthOffset);
 	FX_REGISTER_TOKEN(NoChunkMerging);
 	FX_REGISTER_TOKEN(ForceTransPass);

@@ -700,6 +700,8 @@ enum EToken
 	eT_Billboard,
 	eT_DebugHelper,
 
+	eT_Decal2,
+
 	eT_max,
 	eT_user_first = eT_max + 1
 };

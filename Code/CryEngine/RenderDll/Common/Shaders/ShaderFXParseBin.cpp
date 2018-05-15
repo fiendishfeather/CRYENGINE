@@ -1304,7 +1304,8 @@ bool CShaderManBin::ParseBinFX_Global_Annotations(CParserBin& Parser, SParserFra
 	FX_TOKEN(AlphaBlendShadows)
 	FX_TOKEN(EyeOverlay)
 	FX_TOKEN(WrinkleBlending)
-	FX_TOKEN(Billboard)
+	FX_TOKEN(Billboard) 
+	FX_TOKEN(Decal2)
 	FX_END_TOKENS
 
 	int nIndex;
@@ -1330,6 +1331,15 @@ bool CShaderManBin::ParseBinFX_Global_Annotations(CParserBin& Parser, SParserFra
 			if (!ef)
 				break;
 			ef->m_Flags |= EF_DECAL;
+			//ef->m_Flags2 |= EF2_DECAL2;//only for test
+			ef->m_nMDV |= MDV_DEPTH_OFFSET;
+			break;
+
+		case eT_Decal2:
+			if (!ef)
+				break;
+			ef->m_Flags |= EF_DECAL;
+			ef->m_Flags2 |= EF2_DECAL2;
 			ef->m_nMDV |= MDV_DEPTH_OFFSET;
 			break;
 
