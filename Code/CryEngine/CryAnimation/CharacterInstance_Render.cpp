@@ -244,7 +244,7 @@ void CCharInstance::RenderCHR(const SRendParams& RendParams, const Matrix34& rRe
 	pObj->m_fAlpha = RendParams.fAlpha;
 	pObj->m_fDistance = RendParams.fDistance;
 
-	pObj->m_II.m_AmbColor = RendParams.AmbientColor;
+	pObj->SetAmbientColor(RendParams.AmbientColor, passInfo);
 
 	pObj->m_ObjFlags |= RendParams.dwFObjFlags;
 	SRenderObjData* pD = pObj->GetObjData();
@@ -255,7 +255,7 @@ void CCharInstance::RenderCHR(const SRendParams& RendParams, const Matrix34& rRe
 		pD->SetShaderParams(RendParams.pShaderParams);
 	}
 
-	pObj->m_II.m_Matrix = rRenderMat34;
+	pObj->SetMatrix(rRenderMat34, passInfo);
 
 	pObj->m_nClipVolumeStencilRef = RendParams.nClipVolumeStencilRef;
 	pObj->m_nTextureID = RendParams.nTextureID;
@@ -290,9 +290,7 @@ void CCharInstance::RenderCHR(const SRendParams& RendParams, const Matrix34& rRe
 	Vec3 skinOffset(ZERO);
 	if (m_pDefaultSkeleton->GetModelMesh())
 		skinOffset = m_pDefaultSkeleton->GetModelMesh()->m_vRenderMeshOffset;
-	pD->m_pSkinningData->vecPrecisionOffset[0] = skinOffset.x;
-	pD->m_pSkinningData->vecPrecisionOffset[1] = skinOffset.y;
-	pD->m_pSkinningData->vecPrecisionOffset[2] = skinOffset.z;
+	pD->m_pSkinningData->vecAdditionalOffset = skinOffset;
 
 	if (g_pI3DEngine->IsTessellationAllowed(pObj, passInfo))
 	{

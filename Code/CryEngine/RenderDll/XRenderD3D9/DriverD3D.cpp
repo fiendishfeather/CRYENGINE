@@ -273,16 +273,14 @@ void CD3D9Renderer::ChangeViewport(CRenderDisplayContext* pDC, unsigned int view
 	if (m_bDeviceLost)
 		return;
 
-	// This change will propagate to the other dimensions (output and render)
-	// when HandleDisplayPropertyChanges() is called just before rendering
-	pDC->ChangeDisplayResolution(viewPortOffsetX + viewportWidth, viewPortOffsetY + viewportHeight, SRenderViewport(viewPortOffsetX, viewPortOffsetY, viewportWidth, viewportHeight));
-
-	gRenDev->ExecuteRenderThreadCommand([=]
-		{
-			SetCurDownscaleFactor(Vec2(1, 1));
+	gRenDev->ExecuteRenderThreadCommand([=]{
+			// This change will propagate to the other dimensions (output and render)
+			// when HandleDisplayPropertyChanges() is called just before rendering
+			pDC->ChangeDisplayResolution(viewPortOffsetX + viewportWidth, viewPortOffsetY + viewportHeight, SRenderViewport(viewPortOffsetX, viewPortOffsetY, viewportWidth, viewportHeight));
 
 			if (pDC->IsMainViewport())
 			{
+				SetCurDownscaleFactor(Vec2(1, 1));
 				if (auto pRenderOutput = pDC->GetRenderOutput().get())
 				{
 					CRendererResources::OnOutputResolutionChanged(pDC->GetDisplayResolution()[0], pDC->GetDisplayResolution()[1]);
@@ -3409,7 +3407,7 @@ void CD3D9Renderer::RT_EndFrame()
 	#if CRY_PLATFORM_WINDOWS && !CRY_RENDERER_VULKAN
 			swapDC->EnforceFullscreenPreemption();
 	#endif
-			DWORD syncInterval = ComputePresentInterval(swapDC->GetVSyncHint(), swapDC->GetRefreshRateNumerator(), swapDC->GetRefreshRateDemoninator());
+			DWORD syncInterval = ComputePresentInterval(swapDC->GetVSyncState() != 0, swapDC->GetRefreshRateNumerator(), swapDC->GetRefreshRateDemoninator());
 			hReturn = swapDC->GetSwapChain().Present(syncInterval, 0);
 
 			if (IHmdRenderer* pHmdRenderer = GetS3DRend().GetIHmdRenderer())
@@ -3630,7 +3628,7 @@ void CD3D9Renderer::RT_PresentFast()
 	#if CRY_PLATFORM_WINDOWS
 	swapDC->EnforceFullscreenPreemption();
 	#endif
-	hReturn = swapDC->GetSwapChain().Present(pDC->GetVSyncHint() ? 1 : 0, 0);
+	hReturn = swapDC->GetSwapChain().Present(swapDC->GetVSyncState() ? 1 : 0, 0);
 #endif
 	assert(hReturn == S_OK);
 
@@ -3826,13 +3824,13 @@ bool CD3D9Renderer::DestroyRenderTarget(int nHandle)
 	return true;
 }
 
-bool CD3D9Renderer::ReadFrameBuffer(uint32* pDstRGBA8, int destinationWidth, int destinationHeight)
+bool CD3D9Renderer::ReadFrameBuffer(uint32* pDstRGBA8, int destinationWidth, int destinationHeight, bool readPresentedBackBuffer)
 {
 	bool bResult = false;
 
 	ExecuteRenderThreadCommand([=, &bResult]
 		{
-			if (CTexture* pSourceTexture = GetActiveDisplayContext()->GetPresentedBackBuffer())
+			if (CTexture* pSourceTexture = readPresentedBackBuffer ? GetActiveDisplayContext()->GetPresentedBackBuffer() : GetActiveDisplayContext()->GetCurrentBackBuffer())
 			{
 				bResult = gRenDev->RT_ReadTexture(pDstRGBA8, destinationWidth, destinationHeight, EReadTextureFormat::RGB8, pSourceTexture);
 			}
@@ -3874,9 +3872,9 @@ bool CD3D9Renderer::RT_ReadTexture(void* pDst, int destinationWidth, int destina
 
 			for (unsigned int j = 0; j < destinationWidth; ++j, pSrc += srcStride, pDst += dstStride)
 			{
-				pDst[0] = pSrc[0];
+				pDst[2] = pSrc[0];
 				pDst[1] = pSrc[1];
-				pDst[2] = pSrc[2];
+				pDst[0] = pSrc[2];
 
 				if (dstFormat == EReadTextureFormat::RGBA8)
 					pDst[3] = 255;

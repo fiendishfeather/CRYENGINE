@@ -615,7 +615,7 @@ void CAttachmentVCLOTH::DrawAttachment(SRendParams& RendParams, const SRendering
 
 	pObj->m_fAlpha = RendParams.fAlpha;
 	pObj->m_fDistance = RendParams.fDistance;
-	pObj->m_II.m_AmbColor = RendParams.AmbientColor;
+	pObj->SetAmbientColor(RendParams.AmbientColor, passInfo);
 
 	uLocalObjFlags |= RendParams.dwFObjFlags;
 
@@ -635,7 +635,7 @@ void CAttachmentVCLOTH::DrawAttachment(SRendParams& RendParams, const SRendering
 
 	assert(RendParams.pMatrix);
 	Matrix34 RenderMat34 = (*RendParams.pMatrix);
-	pObj->m_II.m_Matrix = RenderMat34;
+	pObj->SetMatrix(RenderMat34, passInfo);
 	pObj->m_nClipVolumeStencilRef = RendParams.nClipVolumeStencilRef;
 	pObj->m_nTextureID = RendParams.nTextureID;
 
@@ -686,9 +686,7 @@ void CAttachmentVCLOTH::DrawAttachment(SRendParams& RendParams, const SRendering
 	m_pSimSkin->m_arrModelMeshes[nRenderLOD].m_stream.nFrameId = passInfo.GetMainFrameID();
 
 	Vec3 skinOffset = m_pRenderSkin->m_arrModelMeshes[nRenderLOD].m_vRenderMeshOffset;
-	pD->m_pSkinningData->vecPrecisionOffset[0] = skinOffset.x;
-	pD->m_pSkinningData->vecPrecisionOffset[1] = skinOffset.y;
-	pD->m_pSkinningData->vecPrecisionOffset[2] = skinOffset.z;
+	pD->m_pSkinningData->vecAdditionalOffset = skinOffset;
 
 	SVertexAnimationJob *pVertexAnimation = static_cast<SVertexAnimationJob*>(pD->m_pSkinningData->pCustomData);
 

@@ -6,6 +6,8 @@
 
 #include "Vulkan/API/VKSwapChain.hpp"
 
+#include <functional>
+
 namespace NCryVulkan
 {
 class CSwapChain;
@@ -15,9 +17,9 @@ class CCryVKGIFactory;
 class CCryVKSwapChain : public CCryVKGIObject
 {
 public:
-	IMPLEMENT_INTERFACES(CCryVKSwapChain)
+	IMPLEMENT_INTERFACES(CCryVKSwapChain);
 
-	static _smart_ptr<CCryVKSwapChain> Create(_smart_ptr<NCryVulkan::CDevice> pDevice, CONST DXGI_SWAP_CHAIN_DESC * pDesc, VkSurfaceKHR surface);
+	static _smart_ptr<CCryVKSwapChain> Create(_smart_ptr<NCryVulkan::CDevice> pDevice, CONST DXGI_SWAP_CHAIN_DESC * pDesc);
 
 	virtual ~CCryVKSwapChain();
 
@@ -132,14 +134,15 @@ public:
 	#pragma endregion
 	
 protected:
-	CCryVKSwapChain(_smart_ptr<NCryVulkan::CDevice> pDevice, CONST DXGI_SWAP_CHAIN_DESC* pDesc, _smart_ptr<NCryVulkan::CSwapChain> swapchain, bool bVSync);
+	CCryVKSwapChain(_smart_ptr<NCryVulkan::CDevice> pDevice, CONST DXGI_SWAP_CHAIN_DESC* pDesc, _smart_ptr<NCryVulkan::CSwapChain> swapchain, VkSurfaceKHR surface, bool bVSync);
 
-	static VkPresentModeKHR GetPresentMode(DXGI_SWAP_EFFECT swapEffect, bool bEnableVSync);
+	static VkPresentModeKHR GetPresentMode(const VkPhysicalDevice& physicalDevice, const VkSurfaceKHR& surface, DXGI_SWAP_EFFECT swapEffect, bool bEnableVSync);
 	static bool ApplyFullscreenState(bool bFullscreen, uint32_t width, uint32_t height);
 
 private:
 	DXGI_SWAP_CHAIN_DESC               m_Desc;
 	_smart_ptr<NCryVulkan::CDevice>    m_pDevice;
+	VkSurfaceKHR                       m_Surface;
 	_smart_ptr<NCryVulkan::CSwapChain> m_pVKSwapChain;
 	bool                               m_bFullscreen;
 	bool                               m_bVSync;

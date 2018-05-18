@@ -92,7 +92,7 @@ struct SMeshStream
   ~SMeshStream() { memset(this, 0x0, sizeof(*this)); }
 };
 
-// CRenderMesh::m_nFlags
+// CRenderMesh::m_nFlags 
 #define FRM_RELEASED              BIT(0)
 #define FRM_DEPRECTATED_FLAG      BIT(1)
 #define FRM_READYTOUPLOAD         BIT(2)
