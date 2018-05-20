@@ -111,65 +111,111 @@ bool CSceneGBufferStage::CreatePipelineState(const SGraphicsPipelineStateDescrip
 
 		if ((objectFlags & FOB_DECAL) || (objectFlags & FOB_TERRAIN_LAYER) || (((CShader*)desc.shaderItem.m_pShader)->GetFlags() & EF_DECAL))
 		{
-			psoDesc.m_RenderState = (psoDesc.m_RenderState & ~(GS_BLEND_MASK | GS_DEPTHWRITE | GS_DEPTHFUNC_MASK | GS_STENCIL));
-			
-			uint32 pomMask = 134217728; 
-			uint64 vertColMask = 137438953472;
-			uint64 mtlFlagDecalType1 = 536870912; //2000 0000
-
+			psoDesc.m_RenderState = (psoDesc.m_RenderState & ~(GS_BLEND_MASK | GS_DEPTHWRITE | GS_DEPTHFUNC_MASK | GS_STENCIL)); 
 
 			if (((CShader*)desc.shaderItem.m_pShader)->GetFlags() & EF_DECAL)
 			{  
-				if (((CShader*)desc.shaderItem.m_pShader)->GetGenerationMask() & pomMask)
-				{  
-					if (((CShader*)desc.shaderItem.m_pShader)->GetFlags2() & EF2_DECAL2)
+				if (pRes->m_ResFlags & MTL_FLAG_RT_BLEND_TYPE1)
+				{
+					//NEW - TYPE 1
+					psoDesc.m_bCustomTargetBlends = true;
+
+					psoDesc.m_RenderStateIndependent[1] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_ZERO | GS_NOCOLMASK_GBUFFER_OVERLAY;
+					if (pRes->m_ResFlags & MTL_FLAG_RT_BLEND_TYPE2)
 					{
-						//NEW - TYPE 1
-						psoDesc.m_bCustomTargetBlends = true; 
-
-						psoDesc.m_RenderStateIndependent[1] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_ZERO | GS_NOCOLMASK_GBUFFER_OVERLAY;
-						psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_SRCCOL | GS_NOCOLMASK_GBUFFER_OVERLAY;
-						psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
-						psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ZERO | GS_BLDST_ONE;
-						psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
-
-						psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
-						///////////// 
-
+						psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_SRCCOL | GS_NOCOLMASK_RGBA;
 					}
 					else
 					{
-						//NEW - TYPE 2
-						psoDesc.m_bCustomTargetBlends = true;
-
-						psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
-						psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
-						psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
-						psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
-						////////// 
-					}
-				}
-				else if (((CShader*)desc.shaderItem.m_pShader)->GetGenerationMask() & vertColMask)
-				{
-					//NEW - TYPE 3
-					psoDesc.m_bCustomTargetBlends = true;
-
-					psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_RGBA;
+						psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_SRCCOL | GS_NOCOLMASK_GBUFFER_OVERLAY;
+					} 
+					psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
+					psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ZERO | GS_BLDST_ONE;
+					psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
 
 					psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
 					///////////// 
 				}
-				else
+
+				if (!(pRes->m_ResFlags & MTL_FLAG_RT_BLEND_TYPE1))
 				{
 					//NEW - TYPE 2
 					psoDesc.m_bCustomTargetBlends = true;
 
-					psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+					if (pRes->m_ResFlags & MTL_FLAG_RT_BLEND_TYPE2)
+					{ 
+						psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_RGBA;
+					}
+					/*else
+					{
+						psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+					} 
+                    */
 					psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
 					psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
 					psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
-					////////// 
-				} 
+
+					psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY; 
+					///////////// 
+				}
+
+				////////////////////////////////////////////////
+				////////////////////////////////////////////////
+
+				//uint32 pomMask = 134217728; 
+				//uint64 vertColMask = 137438953472;
+				//uint64 mtlFlagDecalType1 = 536870912; //2000 0000 
+
+				//if (((CShader*)desc.shaderItem.m_pShader)->GetGenerationMask() & pomMask)
+				//{  
+				//	if (((CShader*)desc.shaderItem.m_pShader)->GetFlags2() & EF2_DECAL2)
+				//	{
+				//		//NEW - TYPE 1
+				//		psoDesc.m_bCustomTargetBlends = true; 
+
+				//		psoDesc.m_RenderStateIndependent[1] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_ZERO | GS_NOCOLMASK_GBUFFER_OVERLAY;
+				//		psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_DSTCOL | GS_BLDST_SRCCOL | GS_NOCOLMASK_GBUFFER_OVERLAY;
+				//		psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
+				//		psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ZERO | GS_BLDST_ONE;
+				//		psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA;
+
+				//		psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+				//		///////////// 
+
+				//	}
+				//	else
+				//	{
+				//		//NEW - TYPE 2
+				//		psoDesc.m_bCustomTargetBlends = true;
+
+				//		psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+				//		psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+				//		psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+				//		psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+				//		////////// 
+				//	}
+				//}
+				//else if (((CShader*)desc.shaderItem.m_pShader)->GetGenerationMask() & vertColMask)
+				//{
+				//	//NEW - TYPE 3
+				//	psoDesc.m_bCustomTargetBlends = true;
+
+				//	psoDesc.m_RenderStateIndependent[2] |= psoDesc.m_RenderState | GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_RGBA;
+
+				//	psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+				//	///////////// 
+				//}
+				//else
+				//{
+				//	//NEW - TYPE 2
+				//	psoDesc.m_bCustomTargetBlends = true;
+
+				//	psoDesc.m_RenderState |= GS_DEPTHFUNC_LEQUAL | GS_BLSRC_SRCALPHA | GS_BLDST_ONEMINUSSRCALPHA | GS_NOCOLMASK_GBUFFER_OVERLAY;
+				//	psoDesc.m_RenderStateIndependentAlpha[0] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+				//	psoDesc.m_RenderStateIndependentAlpha[1] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+				//	psoDesc.m_RenderStateIndependentAlpha[2] |= GS_BLSRC_ONE | GS_BLDST_ONEMINUSSRCALPHA;
+				//	////////// 
+				//} 
 			}
 			else
 			{

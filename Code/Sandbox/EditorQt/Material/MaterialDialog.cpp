@@ -182,6 +182,12 @@ public:
 	CSmartVariable<bool>        bPropagateShaderGenParams;
 
 	//////////////////////////////////////////////////////////////////////////
+	// SC Custom Flags - Render Target blending
+	//////////////////////////////////////////////////////////////////////////
+	CSmartVariable<bool>        bRTBlendType1;
+	CSmartVariable<bool>        bRTBlendType2;
+
+	//////////////////////////////////////////////////////////////////////////
 	// Lighting
 	//////////////////////////////////////////////////////////////////////////
 	CSmartVariable<Vec3>  diffuse;        // Diffuse color 0..1
@@ -489,6 +495,12 @@ public:
 		AddVariable(tableAdvanced, bPropagateShaderGenParams, "Propagate Shader Generation");
 		AddVariable(tableAdvanced, bPropagateVertexDef, "Propagate Vertex Deformation");
 		AddVariable(tableAdvanced, bPropagateLayerPresets, "Propagate Layer Presets");
+
+		//////////////////////////////////////////////////////////////////////////
+		// SC Custom Flags - Render Target blending
+		//////////////////////////////////////////////////////////////////////////
+		AddVariable(tableAdvanced, bRTBlendType1, "Decal - Multiply Base Color");
+		AddVariable(tableAdvanced, bRTBlendType2, "Decal - Ignore Specular");
 
 		//////////////////////////////////////////////////////////////////////////
 		// Init Vertex Deformation.
@@ -1176,6 +1188,10 @@ void CMaterialUI::SetFromMaterial(CMaterial* mtlIn, bool bSetTemplate)
 	bHideAfterBreaking = (mtlFlags & MTL_FLAG_HIDEONBREAK);
 	bBlendTerrainColor = (mtlFlags & MTL_FLAG_BLEND_TERRAIN);
 	bTraceableTexture = (mtlFlags & MTL_FLAG_TRACEABLE_TEXTURE);
+
+	bRTBlendType1 = (mtlFlags & MTL_FLAG_RT_BLEND_TYPE1);
+	bRTBlendType2 = (mtlFlags & MTL_FLAG_RT_BLEND_TYPE2);
+
 	texUsageMask = mtl->GetTexmapUsageMask();
 
 	allowLayerActivation = mtl->LayerActivationAllowed();
@@ -1263,6 +1279,16 @@ void CMaterialUI::SetToMaterial(CMaterial* mtl, int propagationFlags)
 			mtlFlags |= MTL_FLAG_TRACEABLE_TEXTURE;
 		else
 			mtlFlags &= ~MTL_FLAG_TRACEABLE_TEXTURE;
+
+		if (bRTBlendType1)
+			mtlFlags |= MTL_FLAG_RT_BLEND_TYPE1;
+		else
+			mtlFlags &= ~MTL_FLAG_RT_BLEND_TYPE1;
+
+		if (bRTBlendType2)
+			mtlFlags |= MTL_FLAG_RT_BLEND_TYPE2;
+		else
+			mtlFlags &= ~MTL_FLAG_RT_BLEND_TYPE2;
 	}
 
 	mtl->SetFlags(mtlFlags);
