@@ -48,7 +48,6 @@
 #include <CryGame/IGame.h>
 #include "WaterRippleManager.h"
 
-
 #if defined(FEATURE_SVO_GI)
 	#include "SVO/SceneTreeManager.h"
 #endif
@@ -1795,7 +1794,7 @@ void C3DEngine::RenderScene(const int nRenderFlags, const SRenderingPassInfo& pa
 #if defined(FEATURE_SVO_GI)
 	if (passInfo.IsGeneralPass() && (nRenderFlags & SHDF_ALLOW_AO))
 	{
-		CSvoManager::Render();
+		CSvoManager::Render((nRenderFlags & SHDF_CUBEMAPGEN) != 0);
 	}
 #endif
 
@@ -1820,7 +1819,7 @@ void C3DEngine::RenderScene(const int nRenderFlags, const SRenderingPassInfo& pa
 	// all shadow casters are submitted, switch render views into eUsageModeWritingDone mode
 	for (const auto& pair : shadowFrustums)
 	{
-		auto &shadowFrustum = pair.first;
+		auto& shadowFrustum = pair.first;
 		CRY_ASSERT(shadowFrustum->pOnePassShadowView);
 		shadowFrustum->pOnePassShadowView->SwitchUsageMode(IRenderView::eUsageModeWritingDone);
 	}
@@ -1906,13 +1905,13 @@ void C3DEngine::RenderScene(const int nRenderFlags, const SRenderingPassInfo& pa
 	if (passInfo.IsGeneralPass() && IsStatObjBufferRenderTasksAllowed() && JobManager::InvokeAsJob("CheckOcclusion"))
 		m_pObjManager->EndOcclusionCulling();
 
-		// release shadow views (from now only renderer owns it)
-		for (const auto& pair : shadowFrustums)
-		{
-			auto &shadowFrustum = pair.first;
-			CRY_ASSERT(shadowFrustum->pOnePassShadowView);
-			shadowFrustum->pOnePassShadowView.reset();
-		}
+	// release shadow views (from now only renderer owns it)
+	for (const auto& pair : shadowFrustums)
+	{
+		auto& shadowFrustum = pair.first;
+		CRY_ASSERT(shadowFrustum->pOnePassShadowView);
+		shadowFrustum->pOnePassShadowView.reset();
+	}
 }
 
 void C3DEngine::ResetCoverageBufferSignalVariables()
@@ -3252,8 +3251,8 @@ void C3DEngine::DisplayInfo(float& fTextPosX, float& fTextPosY, float& fTextStep
 			{
 				float fDiv = 1.f / (Counts.volume.dyn + FLT_MIN);
 				DrawTextRightAligned(fTextPosX, fTextPosY += fTextStepY,
-					"Particle BB vol: Stat %.3g, Stat/Dyn %.2f, Err/Dyn %.3g",
-					Counts.volume.stat, Counts.volume.stat * fDiv, Counts.volume.error * fDiv);
+				                     "Particle BB vol: Stat %.3g, Stat/Dyn %.2f, Err/Dyn %.3g",
+				                     Counts.volume.stat, Counts.volume.stat * fDiv, Counts.volume.error * fDiv);
 			}
 		}
 	}
@@ -3573,9 +3572,13 @@ void C3DEngine::ScreenShotHighRes(CStitchedImage* pStitchedImage, const int nRen
 	RenderInternal(nRenderFlags, screenShotPassInfo, "ScreenShotHighRes");
 
 	GetRenderer()->EndFrame();
+
+	// Check output format and adjust acordingly
+	const char* szExtension = GetCVars()->e_ScreenShotFileFormat->GetString();
+	EReadTextureFormat dstFormat = (stricmp(szExtension, "tga") == 0) ? EReadTextureFormat::BGR8 : EReadTextureFormat::RGB8;
 	
-	GetRenderer()->ReadFrameBuffer((uint32*)pStitchedImage->GetBuffer(), pStitchedImage->GetWidth(), pStitchedImage->GetHeight(), false);
-	GetRenderer()->ResizeContext(passInfo.GetDisplayContextKey(), prevScreenWidth, prevScreenHeight);	
+	GetRenderer()->ReadFrameBuffer((uint32*)pStitchedImage->GetBuffer(), pStitchedImage->GetWidth(), pStitchedImage->GetHeight(), false, dstFormat);
+	GetRenderer()->ResizeContext(passInfo.GetDisplayContextKey(), prevScreenWidth, prevScreenHeight);
 
 	GetRenderer()->EnableSwapBuffers(true);
 
@@ -3831,16 +3834,16 @@ void C3DEngine::PrepareShadowPasses(const SRenderingPassInfo& passInfo, uint32& 
 	CRenderView* pMainRenderView = passInfo.GetRenderView();
 	for (const auto& pair : shadowFrustums)
 	{
-		auto *pFr = pair.first;
-		auto *light = pair.second;
+		auto* pFr = pair.first;
+		auto* light = pair.second;
 
 		assert(!pFr->pOnePassShadowView);
 
 		// Prepare time-sliced shadow frustum updates
 		GetRenderer()->PrepareShadowFrustumForShadowPool(pFr,
-			static_cast<uint32>(passInfo.GetFrameID()),
-			light->GetLightProperties(),
-			&nTimeSlicedShadowsUpdatedThisFrame);
+		                                                 static_cast<uint32>(passInfo.GetFrameID()),
+		                                                 light->GetLightProperties(),
+		                                                 &nTimeSlicedShadowsUpdatedThisFrame);
 
 		IRenderViewPtr pShadowsView = GetRenderer()->GetNextAvailableShadowsView((IRenderView*)pMainRenderView, pFr);
 		for (int cubeSide = 0; cubeSide < pFr->GetNumSides() && shadowPassInfo.size() < kMaxShadowPassesNum; ++cubeSide)
@@ -3853,15 +3856,15 @@ void C3DEngine::PrepareShadowPasses(const SRenderingPassInfo& passInfo, uint32& 
 
 			// create a matching rendering pass info for shadows
 			auto pass = SRenderingPassInfo::CreateShadowPassRenderingInfo(
-				pShadowsView,
-				pFr->GetCamera(cubeSide),
-				pFr->m_Flags,
-				pFr->nShadowMapLod,
-				pFr->nShadowCacheLod,
-				pFr->IsCached(),
-				pFr->bIsMGPUCopy,
-				cubeSide,
-				SRenderingPassInfo::DEFAULT_SHADOWS_FLAGS);
+			  pShadowsView,
+			  pFr->GetCamera(cubeSide),
+			  pFr->m_Flags,
+			  pFr->nShadowMapLod,
+			  pFr->nShadowCacheLod,
+			  pFr->IsCached(),
+			  pFr->bIsMGPUCopy,
+			  cubeSide,
+			  SRenderingPassInfo::DEFAULT_SHADOWS_FLAGS);
 			shadowPassInfo.push_back(std::move(pass));
 		}
 
