@@ -21,16 +21,33 @@ using namespace NCryVulkan;
 
 CDeviceGraphicsPSO_Vulkan::~CDeviceGraphicsPSO_Vulkan()
 {
-	if (m_pipeline != VK_NULL_HANDLE)
-	{
-		vkDestroyPipeline(m_pDevice->GetVkDevice(), m_pipeline, nullptr);
-	}
+	m_pDevice->DeferDestruction(m_pipeline);
 }
+
+static struct
+{
+	ERenderPrimitiveType primitiveType;
+	VkPrimitiveTopology  primitiveTopology;
+	int                  controlPointCount;
+}
+topologyTypes[] =
+{
+	{ eptUnknown,                VK_PRIMITIVE_TOPOLOGY_MAX_ENUM, 0 },
+	{ eptTriangleList,           VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, 0 },
+	{ eptTriangleStrip,          VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, 0 },
+	{ eptLineList,               VK_PRIMITIVE_TOPOLOGY_LINE_LIST, 0 },
+	{ eptLineStrip,              VK_PRIMITIVE_TOPOLOGY_LINE_STRIP, 0 },
+	{ eptPointList,              VK_PRIMITIVE_TOPOLOGY_POINT_LIST, 0 },
+	{ ept1ControlPointPatchList, VK_PRIMITIVE_TOPOLOGY_PATCH_LIST, 1 },
+	{ ept2ControlPointPatchList, VK_PRIMITIVE_TOPOLOGY_PATCH_LIST, 2 },
+	{ ept3ControlPointPatchList, VK_PRIMITIVE_TOPOLOGY_PATCH_LIST, 3 },
+	{ ept4ControlPointPatchList, VK_PRIMITIVE_TOPOLOGY_PATCH_LIST, 4 },
+};
 
 CDeviceGraphicsPSO::EInitResult CDeviceGraphicsPSO_Vulkan::Init(const CDeviceGraphicsPSODesc& psoDesc)
 {
-	m_bValid = false;
-	m_nUpdateCount++;
+	m_isValid = false;
+	m_updateCount++;
 
 	if (psoDesc.m_pResourceLayout == nullptr || psoDesc.m_pShader == nullptr)
 		return EInitResult::Failure;
@@ -52,10 +69,10 @@ CDeviceGraphicsPSO::EInitResult CDeviceGraphicsPSO_Vulkan::Init(const CDeviceGra
 	const bool bDiscardRasterizer = (hwShaders[eHWSC_Pixel].pHwShader == nullptr) && (psoDesc.m_RenderState & GS_NODEPTHTEST) && !(psoDesc.m_RenderState & GS_DEPTHWRITE) && !(psoDesc.m_RenderState & GS_STENCIL);
 	const bool bUsingDynamicDepthBias = psoDesc.m_bDynamicDepthBias;
 	
-	VkPipelineShaderStageCreateInfo shaderStageCreateInfos[eHWSC_Num];
+	VkPipelineShaderStageCreateInfo shaderStageCreateInfos[eHWSC_NumGfx];
 
 	int validShaderCount = 0;
-	for (EHWShaderClass shaderClass = eHWSC_Vertex; shaderClass < eHWSC_Num; shaderClass = EHWShaderClass(shaderClass + 1))
+	for (EHWShaderClass shaderClass = eHWSC_Vertex; shaderClass < eHWSC_NumGfx; shaderClass = EHWShaderClass(shaderClass + 1))
 	{
 		m_pHwShaderInstances[shaderClass] = hwShaders[shaderClass].pHwShaderInstance;
 
@@ -185,47 +202,28 @@ CDeviceGraphicsPSO::EInitResult CDeviceGraphicsPSO_Vulkan::Init(const CDeviceGra
 	vertexInputStateCreateInfo.vertexAttributeDescriptionCount = vertexInputAttributeDescriptions.Num();
 	vertexInputStateCreateInfo.pVertexAttributeDescriptions = vertexInputAttributeDescriptions.Data();
 
-	if (!ValidateShadersAndTopologyCombination(psoDesc, m_pHwShaderInstances))
-		return EInitResult::ErrorShadersAndTopologyCombination;
-
-	VkPrimitiveTopology topology;
 	unsigned int controlPointCount = 0;
-	switch (psoDesc.m_PrimitiveType)
+	VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
+	// primitive topology
 	{
-	case eptTriangleList:
-		topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-		break;
-	case eptTriangleStrip:
-		topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
-		break;
-	case eptLineList:
-		topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-		break;
-	case eptLineStrip:
-		topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
-		break;
-	case eptPointList:
-		topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-		break;
-	case ept1ControlPointPatchList:
-		topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-		controlPointCount = 1;
-		break;
-	case ept2ControlPointPatchList:
-		topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-		controlPointCount = 2;
-		break;
-	case ept3ControlPointPatchList:
-		topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-		controlPointCount = 3;
-		break;
-	case ept4ControlPointPatchList:
-		topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-		controlPointCount = 4;
-		break;
-	default:
-		CRY_ASSERT_MESSAGE(0, "Primitive type not supported");
-		return EInitResult::Failure;
+		if (!ValidateShadersAndTopologyCombination(psoDesc, m_pHwShaderInstances))
+			return EInitResult::ErrorShadersAndTopologyCombination;
+
+		for (int i = 0; i < CRY_ARRAY_COUNT(topologyTypes); ++i)
+		{
+			if (topologyTypes[i].primitiveType == psoDesc.m_PrimitiveType)
+			{
+				topology = topologyTypes[i].primitiveTopology;
+				controlPointCount = topologyTypes[i].controlPointCount;
+				break;
+			}
+		}
+
+		if (topology == VK_PRIMITIVE_TOPOLOGY_MAX_ENUM)
+		{
+			CRY_ASSERT_MESSAGE(0, "Primitive type not supported");
+			return EInitResult::Failure;
+		}
 	}
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo = {};
@@ -321,7 +319,7 @@ CDeviceGraphicsPSO::EInitResult CDeviceGraphicsPSO_Vulkan::Init(const CDeviceGra
 	depthStencilStateCreateInfo.depthTestEnable = ((psoDesc.m_RenderState & GS_NODEPTHTEST) && !(psoDesc.m_RenderState & GS_DEPTHWRITE)) ? VK_FALSE : VK_TRUE;
 	depthStencilStateCreateInfo.depthWriteEnable = (psoDesc.m_RenderState & GS_DEPTHWRITE) ? VK_TRUE : VK_FALSE;
 	depthStencilStateCreateInfo.depthCompareOp = depthCompareOp;
-	depthStencilStateCreateInfo.depthBoundsTestEnable = VK_FALSE;
+	depthStencilStateCreateInfo.depthBoundsTestEnable = psoDesc.m_bDepthBoundsTest ? VK_FALSE : VK_TRUE;
 	depthStencilStateCreateInfo.stencilTestEnable = (psoDesc.m_RenderState & GS_STENCIL) ? VK_TRUE : VK_FALSE;
 
 	depthStencilStateCreateInfo.front.failOp = StencilOp[(psoDesc.m_StencilState & FSS_STENCFAIL_MASK) >> FSS_STENCFAIL_SHIFT];
@@ -451,8 +449,15 @@ CDeviceGraphicsPSO::EInitResult CDeviceGraphicsPSO_Vulkan::Init(const CDeviceGra
 	colorBlendStateCreateInfo.blendConstants[2] = 0.0f;
 	colorBlendStateCreateInfo.blendConstants[3] = 0.0f;
 
-	static const VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR, VK_DYNAMIC_STATE_STENCIL_REFERENCE, VK_DYNAMIC_STATE_DEPTH_BIAS };
-	static const unsigned int dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]);
+	VkDynamicState dynamicStates[8];
+	unsigned int dynamicStateCount = 0;
+
+	dynamicStates[dynamicStateCount++] = VK_DYNAMIC_STATE_VIEWPORT;
+	dynamicStates[dynamicStateCount++] = VK_DYNAMIC_STATE_SCISSOR;
+	dynamicStates[dynamicStateCount++] = VK_DYNAMIC_STATE_STENCIL_REFERENCE;
+	dynamicStates[dynamicStateCount++] = VK_DYNAMIC_STATE_DEPTH_BIAS; // This must be enabled to not pick up the config for depth-bias in VkPipelineRasterizationStateCreateInfo (see above)
+	if (psoDesc.m_bDepthBoundsTest)
+		dynamicStates[dynamicStateCount++] = VK_DYNAMIC_STATE_DEPTH_BOUNDS;
 
 	VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = {};
 	dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
@@ -491,7 +496,7 @@ CDeviceGraphicsPSO::EInitResult CDeviceGraphicsPSO_Vulkan::Init(const CDeviceGra
 	m_PrimitiveTypeForProfiling = psoDesc.m_PrimitiveType;
 #endif
 
-	m_bValid = true;
+	m_isValid = true;
 
 	return EInitResult::Success;
 }
@@ -500,16 +505,13 @@ CDeviceGraphicsPSO::EInitResult CDeviceGraphicsPSO_Vulkan::Init(const CDeviceGra
 
 CDeviceComputePSO_Vulkan::~CDeviceComputePSO_Vulkan()
 {
-	if (m_pipeline != VK_NULL_HANDLE)
-	{
-		vkDestroyPipeline(m_pDevice->GetVkDevice(), m_pipeline, nullptr);
-	}
+	m_pDevice->DeferDestruction(m_pipeline);
 }
 
 bool CDeviceComputePSO_Vulkan::Init(const CDeviceComputePSODesc& psoDesc)
 {
-	m_bValid = false;
-	m_nUpdateCount++;
+	m_isValid = false;
+	m_updateCount++;
 
 	if (psoDesc.m_pResourceLayout == nullptr || psoDesc.m_pShader == nullptr)
 		return false;
@@ -548,7 +550,7 @@ bool CDeviceComputePSO_Vulkan::Init(const CDeviceComputePSODesc& psoDesc)
 		return false;
 
 	m_pHwShaderInstance = hwShaders[eHWSC_Compute].pHwShaderInstance;
-	m_bValid = true;
+	m_isValid = true;
 
 	return true;
 }

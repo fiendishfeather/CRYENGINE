@@ -75,6 +75,7 @@ public:
 	void DeferDestruction(CBufferView&& view);
 	void DeferDestruction(CImageView&& view);
 	void DeferDestruction(VkRenderPass renderPass, VkFramebuffer frameBuffer);
+	void DeferDestruction(VkPipeline pipeline);
 
 	// Ticks the deferred destruction for the above types.
 	// After kDeferTicks the deferred objects will be actually destroyed.
@@ -109,16 +110,25 @@ private:
 		~SRenderPass();
 	};
 
+	struct SPipeline
+	{
+		VkDevice self;
+		CAutoHandle<VkPipeline> pipeline;
+		SPipeline(SPipeline&&) = default;
+		~SPipeline();
+	};
+
 	static const uint32_t        kDeferTicks = 2; // One for "currently recording", one for "currently executing on GPU", may need to be adjusted?
 	CryCriticalSection           m_deferredLock;
 	std::vector<CBufferView>     m_deferredBufferViews[kDeferTicks];
 	std::vector<CImageView>      m_deferredImageViews[kDeferTicks];
 	std::vector<CSampler>        m_deferredSamplers[kDeferTicks];
 	std::vector<SRenderPass>     m_deferredRenderPasses[kDeferTicks];
+	std::vector<SPipeline>       m_deferredPipelines[kDeferTicks];
 
 	// Objects that should be released when they are not in use anymore
-	static CryCriticalSectionNonRecursive m_ReleaseHeapTheadSafeScope[2];
-	static CryCriticalSectionNonRecursive m_RecycleHeapTheadSafeScope[2];
+	static CryCriticalSectionNonRecursive m_ReleaseHeapTheadSafeScope[3];
+	static CryCriticalSectionNonRecursive m_RecycleHeapTheadSafeScope[3];
 
 	template<class CResource> CryCriticalSectionNonRecursive& GetReleaseHeapCriticalSection();
 	template<class CResource> CryCriticalSectionNonRecursive& GetRecycleHeapCriticalSection();
@@ -138,12 +148,16 @@ private:
 	};
 
 	template<class CResource> using TReleaseHeap = std::unordered_map<CResource*, ReleaseInfo>;
-	template<class CResource> using TRecycleHeap = std::unordered_multimap<THash, RecycleInfo<CResource>>;
+	template<class CResource> using TRecycleHeap = std::unordered_map<THash, std::deque<RecycleInfo<CResource>>>;
 
 	TReleaseHeap<CBufferResource> m_BufferReleaseHeap;
-	TReleaseHeap<CImageResource > m_ImageReleaseHeap;
 	TRecycleHeap<CBufferResource> m_BufferRecycleHeap;
-	TRecycleHeap<CImageResource > m_ImageRecycleHeap;
+
+	TReleaseHeap<CDynamicOffsetBufferResource> m_DynamicOffsetBufferReleaseHeap;
+	TRecycleHeap<CDynamicOffsetBufferResource> m_DynamicOffsetBufferRecycleHeap;
+
+	TReleaseHeap<CImageResource> m_ImageReleaseHeap;
+	TRecycleHeap<CImageResource> m_ImageRecycleHeap;
 
 	template<class CResource> TReleaseHeap<CResource>& GetReleaseHeap();
 	template<class CResource> TRecycleHeap<CResource>& GetRecycleHeap();

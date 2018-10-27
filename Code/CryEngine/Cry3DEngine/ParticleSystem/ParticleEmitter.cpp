@@ -22,7 +22,7 @@ CParticleEmitter::CParticleEmitter(CParticleEffect* pEffect, uint emitterId)
 	, m_registered(false)
 	, m_boundsChanged(false)
 	, m_realBounds(AABB::RESET)
-	, m_maxBounds(AABB::RESET)
+	, m_nextBounds(AABB::RESET)
 	, m_bounds(AABB::RESET)
 	, m_viewDistRatio(1.0f)
 	, m_active(false)
@@ -109,7 +109,12 @@ void CParticleEmitter::Render(const struct SRendParams& rParam, const SRendering
 	if (passInfo.IsShadowPass())
 		return;
 
-	m_unrendered = 0;
+	CParticleJobManager& jobManager = GetPSystem()->GetJobManager();
+	if (ThreadMode() >= 4 && !WasRenderedLastFrame())
+	{
+		// Not currently scheduled for high priority update
+		jobManager.ScheduleUpdateEmitter(this);
+	}
 
 	CLightVolumesMgr& lightVolumeManager = m_p3DEngine->GetLightVolumeManager();
 	SRenderContext renderContext(rParam, passInfo);
@@ -118,13 +123,32 @@ void CParticleEmitter::Render(const struct SRendParams& rParam, const SRendering
 	ColorF fogVolumeContrib;
 	CFogVolumeRenderNode::TraceFogVolumes(GetPos(), fogVolumeContrib, passInfo);
 	renderContext.m_fogVolumeId = passInfo.GetIRenderView()->PushFogVolumeContribution(fogVolumeContrib, passInfo);
+
+	if (m_pEffect->RenderDeferred.size())
+	{
+		jobManager.AddDeferredRender(this, renderContext);
+	}
 	
-	GetPSystem()->GetThreadData().statsCPU.emitters.rendered ++;
 	for (auto& pRuntime : m_componentRuntimes)
 	{
-		if (pRuntime->GetComponent()->IsVisible() && passInfo.GetCamera().IsAABBVisible_E(pRuntime->GetBounds()))
-			pRuntime->GetComponent()->RenderAll(this, pRuntime, renderContext);
+		if (pRuntime->GetComponent()->IsVisible())
+			pRuntime->RenderAll(renderContext);
 	}
+	
+	m_unrendered = 0;
+	GetPSystem()->GetThreadData().statsCPU.emitters.rendered ++;
+}
+
+void CParticleEmitter::CheckUpdated()
+{
+	if (m_effectEditVersion < 0 || (gEnv->IsEditing() && m_effectEditVersion != m_pEffectOriginal->GetEditVersion() + m_emitterEditVersion))
+	{
+		m_attributeInstance.Reset(m_pEffectOriginal->GetAttributeTable());
+		UpdateRuntimes();
+	}
+	if (m_time > m_timeDeath)
+		if (m_timeUpdated < m_time)
+			m_alive = false;
 }
 
 void CParticleEmitter::Update()
@@ -134,7 +158,7 @@ void CParticleEmitter::Update()
 	if (m_attributeInstance.WasChanged())
 		SetChanged();
 
-	if (IsStable())
+	if (ThreadMode() >= 3 && IsStable())
 		// Update only for last frame, even if update skipped for longer
 		m_timeUpdated = m_time;
 
@@ -145,30 +169,27 @@ void CParticleEmitter::Update()
 
 	UpdateFromEntity();
 
-	for (auto const& elem: GetCEffect()->MainPreUpdate)
+	for (auto const& pComponent: GetCEffect()->MainPreUpdate)
 	{
-		if (auto pRuntime = GetRuntimeFor(elem.pComponent))
-			elem.pFeature->MainPreUpdate(pRuntime);
-	}
-
-	if (CParticleJobManager::ThreadMode() >= 4 && SkipUpdate())
-	{
-		// If not updating this frame, use max bounds for visibility
-		if (!m_bounds.ContainsBox(m_maxBounds))
+		if (auto pRuntime = GetRuntimeFor(pComponent))
 		{
-			m_bounds = m_maxBounds;
-			m_boundsChanged = true;
+			pComponent->MainPreUpdate(*pRuntime);
 		}
 	}
 
 	if (m_boundsChanged)
 	{
 		m_boundsChanged = false;
+		m_bounds = m_nextBounds;
 		if (!HasBounds())
 			Unregister();
 		else
 			Register();
 	}
+
+	if (HasBounds())
+		CParticleManager::Instance()->GetPhysEnviron().Update(m_physEnviron, 
+			m_bounds, m_visEnviron.OriginIndoors(), m_pEffect->GetEnvironFlags() | ENV_WATER, true, 0);
 
 	// Apply stats from last update
 	auto& stats = GetPSystem()->GetThreadData().statsCPU;
@@ -180,36 +201,38 @@ void CParticleEmitter::Update()
 namespace Bounds
 {
 	float Expansion       = 1.125f;
-	float ShrinkThreshold = 0.5f;
+	float ShrinkThreshold = 0.25f;
 }
 
 void CParticleEmitter::UpdateBoundingBox()
 {
 	CRY_PFX2_PROFILE_DETAIL;
 
-	if (!m_registered || 
-	!m_bounds.ContainsBox(m_realBounds) ||
-	m_realBounds.GetVolume() <= m_bounds.GetVolume() * Bounds::ShrinkThreshold)
+	if (!m_registered
+	|| m_realBounds.GetVolume() <= m_bounds.GetVolume() * Bounds::ShrinkThreshold)
+	{
 		m_boundsChanged = true;
-	
+		m_nextBounds = m_realBounds;
+	}
+	else if (!m_bounds.ContainsBox(m_realBounds))
+	{
+		m_boundsChanged = true;
+		m_nextBounds.Add(m_realBounds);
+	}
+
 	if (m_boundsChanged)
 	{
-		if (m_realBounds.IsReset())
-		{
-			m_bounds.Reset();
-		}
-		else
+		if (!m_nextBounds.IsReset())
 		{
 			// Expand bounds to avoid frequent re-registering
-			Vec3 center = m_realBounds.GetCenter();
-			Vec3 extent = m_realBounds.GetSize() * (Bounds::Expansion * 0.5f);
-			m_bounds = AABB(center - extent, center + extent);
-			m_maxBounds.Add(m_bounds);
+			Vec3 center = m_nextBounds.GetCenter();
+			Vec3 extent = m_nextBounds.GetSize() * (Bounds::Expansion * 0.5f);
+			m_nextBounds = AABB(center - extent, center + extent);
 		}
 	}
 }
 
-bool CParticleEmitter::UpdateAll()
+bool CParticleEmitter::UpdateParticles()
 {
 	// Multithread support
 	stl::AutoLock<stl::PSyncMultiThread> lock(m_lock);
@@ -250,13 +273,30 @@ bool CParticleEmitter::UpdateAll()
 	return true;
 }
 
-void CParticleEmitter::SyncUpdate()
+void CParticleEmitter::SyncUpdateParticles()
 {
-	if (CParticleJobManager::ThreadMode() >= 2)
+	if (ThreadMode() >= 1)
 	{
-		UpdateAll();
+		auto& statsSync = GetPSystem()->GetThreadData().statsSync;
+		statsSync.alive += m_componentRuntimes.size();
+		statsSync.rendered += m_pEffect->RenderDeferred.size();
+		if (UpdateParticles())
+			statsSync.updated += m_componentRuntimes.size();
 	}
-	CRY_PFX2_ASSERT(m_timeUpdated >= m_time);
+	CRY_ASSERT(m_timeUpdated >= m_time);
+}
+
+void CParticleEmitter::RenderDeferred(const SRenderContext& renderContext)
+{
+	SyncUpdateParticles();
+
+	for (auto const& pComponent: m_pEffect->RenderDeferred)
+	{
+		if (auto pRuntime = GetRuntimeFor(pComponent))
+		{
+			pComponent->RenderDeferred(*pRuntime, renderContext);
+		}
+	}
 }
 
 void CParticleEmitter::DebugRender(const SRenderingPassInfo& passInfo) const
@@ -280,25 +320,21 @@ void CParticleEmitter::DebugRender(const SRenderingPassInfo& passInfo) const
 
 	if (visible)
 	{
-		// Draw component boxes and label
-		const ColorB componentColor = ColorF(1, 0.5, 0) * alphaColor;
+		// Draw component boxes and labels
 		for (auto& pRuntime : m_componentRuntimes)
 		{
 			if (!pRuntime->GetBounds().IsReset())
 			{
+				const float volumeRatio = div_min(pRuntime->GetBounds().GetVolume(), m_realBounds.GetVolume(), 1.0f);
+				const ColorB componentColor = ColorF(1, 0.5, 0) * (alphaColor * sqrt(volumeRatio));
 				pRenderAux->DrawAABB(pRuntime->GetBounds(), false, componentColor, eBBD_Faceted);
 				string label = string().Format("%s #%d", pRuntime->GetComponent()->GetName(),
-					pRuntime->GetContainer().GetNumParticles());
+					pRuntime->GetContainer().GetRealNumParticles());
 				IRenderAuxText::DrawLabelEx(pRuntime->GetBounds().GetCenter(), 1.5f, componentColor, true, true, label);
 			}
 		}
 		string label = string().Format("%s #%d Age %.3f", m_pEffect->GetShortName().c_str(), m_stats.particles.alive, GetAge());
 		IRenderAuxText::DrawLabelEx(m_location.t, 1.5f, (float*)&alphaColor, true, true, label);
-	}
-	if (!m_maxBounds.IsReset())
-	{
-		const ColorB emitterColor = ColorF(0, 1, 1) * alphaColor;
-		pRenderAux->DrawAABB(m_maxBounds, false, emitterColor, eBBD_Faceted);
 	}
 	if (!m_bounds.IsReset())
 	{
@@ -401,7 +437,7 @@ void CParticleEmitter::Activate(bool activate)
 		m_timeUpdated = m_time;
 		m_timeStable = m_time + timings.m_equilibriumTime;
 		m_timeDeath = m_time + timings.m_maxTotalLIfe;
-		m_bounds = m_realBounds = m_maxBounds = AABB::RESET;
+		m_bounds = m_realBounds = m_nextBounds = AABB::RESET;
 		m_alive = true;
 
 		m_effectEditVersion = -1; // Force creation of Runtimes next Update
@@ -431,7 +467,6 @@ void CParticleEmitter::SetChanged()
 		const auto& timings = m_pEffect->GetTimings();
 		m_timeStable = max(timings.m_equilibriumTime, m_time + timings.m_stableTime);
 	}
-	m_maxBounds.Reset();
 }
 
 void CParticleEmitter::Kill()
@@ -449,6 +484,8 @@ bool CParticleEmitter::IsActive() const
 
 void CParticleEmitter::SetLocation(const QuatTS& loc)
 {
+	CRY_PFX2_PROFILE_DETAIL;
+
 	QuatTS prevLoc = m_location;
 	m_location = loc;
 	if (m_spawnParams.bPlaced && m_pEffect->IsSubstitutedPfx1())
@@ -458,6 +495,9 @@ void CParticleEmitter::SetLocation(const QuatTS& loc)
 
 	m_parentContainer.GetIOVec3Stream(EPVF_Position).Store(0, m_location.t);
 	m_parentContainer.GetIOQuatStream(EPQF_Orientation).Store(0, m_location.q);
+
+	if (IsEquivalent(m_location, prevLoc, RAD_EPSILON, 0.001f))
+		return;
 
 	if (m_registered)
 	{
@@ -581,7 +621,7 @@ void CParticleEmitter::UpdateRuntimes()
 	m_componentRuntimesFor.clear();
 	TRuntimes newRuntimes;
 
-	m_pEffectOriginal->Compile();
+	m_pEffectOriginal->Update();
 
 	if (!m_emitterFeatures.empty())
 	{
@@ -604,7 +644,7 @@ void CParticleEmitter::UpdateRuntimes()
 			}
 		}
 		m_pEffect->SetChanged();
-		m_pEffect->Compile();
+		m_pEffect->Update();
 	}
 	else
 	{
@@ -777,9 +817,7 @@ void CParticleEmitter::Register()
 
 	m_visEnviron.Invalidate();
 	m_visEnviron.Update(GetPos(), m_bounds);
-	m_physEnviron.GetPhysAreas(
-		CParticleManager::Instance()->GetPhysEnviron(), m_bounds,
-		m_visEnviron.OriginIndoors(), m_pEffect->GetEnvironFlags() | ENV_WATER, true, 0);
+	m_physEnviron.OnPhysAreaChange();
 }
 
 void CParticleEmitter::Unregister()
@@ -816,16 +854,6 @@ uint CParticleEmitter::GetParticleSpec() const
 
 	const ESystemConfigSpec configSpec = gEnv->pSystem->GetConfigSpec();
 	return uint(configSpec);
-}
-
-void CParticleEmitter::CheckUpdated()
-{
-	if (m_effectEditVersion < 0 || (gEnv->IsEditing() && m_effectEditVersion != m_pEffectOriginal->GetEditVersion() + m_emitterEditVersion))
-	{
-		m_attributeInstance.Reset(m_pEffectOriginal->GetAttributeTable());
-		UpdateRuntimes();
-	}
-	m_alive = m_componentRuntimes.size() && m_time <= m_timeDeath;
 }
 
 }

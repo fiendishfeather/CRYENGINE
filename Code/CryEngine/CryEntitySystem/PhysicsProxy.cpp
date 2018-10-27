@@ -479,7 +479,7 @@ void CEntityPhysics::AwakeOnRender(bool bRender)
 
 void CEntityPhysics::OnTimer(int id)
 {
-	if (GetEntity()->HasInternalFlag(CEntity::EInternalFlag::PhysicsAttachClothOnRender) && m_pPhysicalEntity)
+	if ((m_timerId == IEntity::CREATE_NEW_UNIQUE_TIMER_ID || m_timerId == id) && GetEntity()->HasInternalFlag(CEntity::EInternalFlag::PhysicsAttachClothOnRender) && m_pPhysicalEntity)
 	{
 		for (int slot = 0; slot < GetEntity()->GetSlotCount(); slot++)
 		{
@@ -509,7 +509,7 @@ void CEntityPhysics::OnTimer(int id)
 			GetEntity()->RemoveSimpleEventListener(ENTITY_EVENT_TIMER, this);
 			return;
 		}
-		GetEntity()->SetTimer(IEntity::CREATE_NEW_UNIQUE_TIMER_ID, 50);
+		m_timerId = GetEntity()->SetTimer(IEntity::CREATE_NEW_UNIQUE_TIMER_ID, 50);
 	}
 }
 
@@ -1171,7 +1171,12 @@ void CEntityPhysics::MovePhysics(CEntityPhysics* dstPhysics)
 		PhysicalWorld()->DestroyPhysicalEntity(dstPhysics->m_pPhysicalEntity);
 	}
 
-	for (uint32 i = static_cast<uint32>(CEntity::EInternalFlag::FirstPhysicsFlag); i < static_cast<uint32>(CEntity::EInternalFlag::LastPhysicsFlag) + 1; ++i)
+	using FlagType = std::underlying_type<CEntity::EInternalFlag>::type;
+
+	constexpr FlagType firstFlag = static_cast<FlagType>(CEntity::EInternalFlag::FirstPhysicsFlag);
+	constexpr FlagType endFlag = static_cast<FlagType>(CEntity::EInternalFlag::LastPhysicsFlag) << 1;
+
+	for (FlagType i = firstFlag; i != endFlag; i <<= 1)
 	{
 		dstPhysics->GetEntity()->SetInternalFlag(static_cast<CEntity::EInternalFlag>(i), GetEntity()->HasInternalFlag(static_cast<CEntity::EInternalFlag>(i)));
 		GetEntity()->SetInternalFlag(static_cast<CEntity::EInternalFlag>(i), false);

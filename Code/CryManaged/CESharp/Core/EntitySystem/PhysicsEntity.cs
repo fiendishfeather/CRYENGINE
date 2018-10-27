@@ -74,7 +74,7 @@ namespace CryEngine.EntitySystem
 		/// </summary>
 		/// <value>The physicalized type of the <see cref="PhysicsObject"/>.</value>
 		[SerializeValue]
-		public PhysicalizationType PhysicsType{ get; set;} = PhysicalizationType.None;
+		public PhysicalizationType PhysicsType{ get; protected set;} = PhysicalizationType.None;
 
 		/// <summary>
 		/// Gets the Entity that this <see cref="PhysicsObject"/> belongs to. 
@@ -211,12 +211,40 @@ namespace CryEngine.EntitySystem
 		/// Adds an impulse to this <see cref="PhysicsObject"/>. The impulse will be applied to the point in world-space.
 		/// </summary>
 		/// <param name="impulse">Direction and length of the impulse.</param>
-		/// <param name="point">Point of application, in world-space.</param>
+		/// <param name="point">Point of application in world-space.</param>
 		public void AddImpulse(Vector3 impulse, Vector3 point)
 		{
 			var action = new pe_action_impulse();
 			action.impulse = impulse;
 			action.point = point;
+			NativeHandle.Action(action);
+		}
+
+		/// <summary>
+		/// Adds an angled impulse to this <see cref="PhysicsObject"/>.
+		/// </summary>
+		/// <param name="impulse">Angle and length of the impulse.</param>
+		public void AddAngImpulse(Vector3 impulse)
+		{
+			var action = new pe_action_impulse
+			{
+				angImpulse = impulse
+			};
+			NativeHandle.Action(action);
+		}
+
+		/// <summary>
+		/// Adds an angled impulse to this <see cref="PhysicsObject"/>. The impulse will be applied to the point in world-space.
+		/// </summary>
+		/// <param name="impulse">Direction and length of the impulse.</param>
+		/// <param name="point">Point of application in world-space.</param>
+		public void AddAngImpulse(Vector3 impulse, Vector3 point)
+		{
+			var action = new pe_action_impulse
+			{
+				angImpulse = impulse,
+				point = point
+			};
 			NativeHandle.Action(action);
 		}
 
@@ -360,10 +388,12 @@ namespace CryEngine.EntitySystem
 				return;
 			}
 
-			var physParams = new SEntityPhysicalizeParams();
-			physParams.mass = mass;
-			physParams.type = (int)type;
-			OwnerEntity.NativeHandle.Physicalize(physParams);
+			OwnerEntity.NativeHandle.Physicalize(new SEntityPhysicalizeParams
+			{
+				mass = mass,
+				type = (int)type
+			});
+			PhysicsType = type;
 		}
 
 		/// <summary>
@@ -387,12 +417,12 @@ namespace CryEngine.EntitySystem
 		[Obsolete("Using EPhysicalizizationType is obsolete. Use PhysicalizationType instead.")]
 		public void Physicalize(float mass, int density, EPhysicalizationType type)
 		{
-			var physParams = new SEntityPhysicalizeParams();
-			physParams.mass = mass;
-			physParams.density = density;
-			physParams.type = (int)type;
-
-			OwnerEntity.NativeHandle.Physicalize(physParams);
+			OwnerEntity.NativeHandle.Physicalize(new SEntityPhysicalizeParams
+			{
+				mass = mass,
+				density = density,
+				type = (int)type
+			});
 			SetType((pe_type)type);
 		}
 

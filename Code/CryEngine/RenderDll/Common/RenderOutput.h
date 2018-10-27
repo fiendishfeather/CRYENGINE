@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <Common/Textures/TempDepthTexture.h>
 #include <CryCore/optional.h>
 
 class CRenderDisplayContext;
@@ -29,6 +28,9 @@ public:
 	void                   EndRendering(CRenderView* pRenderView);
 
 	//! HDR and Z Depth render target
+	ETEX_Format            GetColorFormat() const;
+	ETEX_Format            GetDepthFormat() const;
+
 	CTexture*              GetColorTarget() const;
 	CTexture*              GetDepthTarget() const;
 	bool                   RequiresTemporaryDepthBuffer() const { return m_bUseTempDepthBuffer; }
@@ -54,6 +56,16 @@ public:
 
 	uint32                 m_hasBeenCleared = 0;
 
+	//! Debug name for this Render Output
+	std::string            m_name;
+	// Unique id to identify each output
+	uint32                 m_uniqueId = 0;
+
+	// Denotes if pass-through is HDR content
+	bool                   m_bHDRRendering = false;
+
+	bool                   m_bRenderToSwapChain = false;
+
 private:
 	uint32                 m_OutputWidth  = -1;
 	uint32                 m_OutputHeight = -1;
@@ -68,8 +80,7 @@ private:
 	ColorF                 m_clearColor = {};
 	float                  m_clearDepth = 0.0f;
 
-	bool                                         m_bUseTempDepthBuffer = false;
-	CResourcePool<STempDepthTexture>::value_type m_pTempDepthTexture = nullptr;
+	bool                   m_bUseTempDepthBuffer = false;
 
 	SRenderViewport        m_viewport;
 

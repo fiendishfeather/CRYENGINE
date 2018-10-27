@@ -67,10 +67,13 @@ CDeviceObjectFactory CDeviceObjectFactory::m_singleton;
 
 CDeviceObjectFactory::~CDeviceObjectFactory()
 {
-	if (m_fence_handle != DeviceFenceHandle() && FAILED(ReleaseFence(m_fence_handle)))
-	{
-		CryWarning(VALIDATOR_MODULE_RENDERER, VALIDATOR_WARNING, "could not release sync fence");
-	}
+#if (CRY_RENDERER_DIRECT3D >= 120)
+	/* No need to do anything */;
+#elif (CRY_RENDERER_DIRECT3D >= 110)
+	/* Context already deconstructed */;
+#elif (CRY_RENDERER_VULKAN >= 10)
+	/* No need to do anything */;
+#endif
 }
 
 bool CDeviceObjectFactory::CanUseCoreCommandList()
@@ -81,55 +84,29 @@ bool CDeviceObjectFactory::CanUseCoreCommandList()
 ////////////////////////////////////////////////////////////////////////////
 // Fence API (TODO: offload all to CDeviceFenceHandle)
 
-void CDeviceObjectFactory::SyncToGPU()
+void CDeviceObjectFactory::FlushToGPU(bool bWait, bool bGarbageCollect) const
 {
-	if (CRenderer::CV_r_enable_full_gpu_sync)
-	{
-		if (m_fence_handle == DeviceFenceHandle() && FAILED(CreateFence(m_fence_handle)))
-		{
-			CryWarning(VALIDATOR_MODULE_RENDERER, VALIDATOR_WARNING, "could not create sync fence");
-		}
-		if (m_fence_handle)
-		{
-			IssueFence(m_fence_handle);
-			SyncFence(m_fence_handle, true);
-		}
-	}
-}
-
-void CDeviceObjectFactory::IssueFrameFences()
-{
-	static_assert(CRY_ARRAY_COUNT(m_frameFences) == MAX_FRAMES_IN_FLIGHT, "Unexpected size for m_frameFences");
-
-	if (!m_frameFences[0])
-	{
-		m_frameFenceCounter = MAX_FRAMES_IN_FLIGHT;
-		for (uint32 i = 0; i < CRY_ARRAY_COUNT(m_frameFences); i++)
-		{
-			HRESULT hr = CreateFence(m_frameFences[i]);
-			assert(hr == S_OK);
-		}
-		return;
-	}
-
-	HRESULT hr = IssueFence(m_frameFences[m_frameFenceCounter % MAX_FRAMES_IN_FLIGHT]);
-	assert(hr == S_OK);
-
-	if (CRenderer::CV_r_SyncToFrameFence)
-	{
-		// Stall render thread until GPU has finished processing previous frame (in case max frame latency is 1)
-		PROFILE_FRAME("WAIT FOR GPU");
-		HRESULT hr = SyncFence(m_frameFences[(m_frameFenceCounter - (MAX_FRAMES_IN_FLIGHT - 1)) % MAX_FRAMES_IN_FLIGHT], true, true);
-		assert(hr == S_OK);
-	}
-	m_completedFrameFenceCounter = m_frameFenceCounter - (MAX_FRAMES_IN_FLIGHT - 1);
-	m_frameFenceCounter += 1;
-}
-
-void CDeviceObjectFactory::ReleaseFrameFences()
-{
-	for (uint32 i = 0; i < CRY_ARRAY_COUNT(m_frameFences); i++)
-		ReleaseFence(m_frameFences[i]);
+#if (CRY_RENDERER_DIRECT3D >= 120)
+	GetDX12Scheduler()->Flush(bWait);
+	if (bGarbageCollect)
+		GetDX12Scheduler()->GarbageCollect();
+#elif (CRY_RENDERER_DIRECT3D >= 110)
+	GetDX11Scheduler()->Flush(bWait);
+	if (bGarbageCollect)
+		GetDX11Scheduler()->GarbageCollect();
+#elif (CRY_RENDERER_VULKAN >= 10)
+	GetVKScheduler()->Flush(bWait);
+	if (bGarbageCollect)
+		GetVKScheduler()->GarbageCollect();
+#elif (CRY_RENDERER_GNM)
+	CGnmGraphicsCommandList* const pCommandList = GnmCommandList(GetCoreCommandList().GetGraphicsInterfaceImpl());
+	const SGnmTimeStamp timeStamp = pCommandList->GnmFlush(false);
+	if (bWait)
+		gGnmDevice->GnmWait(timeStamp);
+	/* Garbage collection is automatic (background-thread) */
+#else
+#pragma message("Missing fall-back FlushToGPU-implementation for the given platform")
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -549,7 +526,7 @@ void CDeviceObjectFactory::TrimResources()
 {
 	CRY_ASSERT(gRenDev->m_pRT->IsRenderThread());
 
-	TrimPipelineStates();
+	TrimPipelineStates(gRenDev->GetRenderFrameID());
 	TrimResourceLayouts();
 	TrimRenderPasses();
 
@@ -611,8 +588,11 @@ void CDeviceObjectFactory::ReleaseResources()
 	ReleaseResourcesImpl();
 }
 
-void CDeviceObjectFactory::ReloadPipelineStates()
+void CDeviceObjectFactory::ReloadPipelineStates(int currentFrameID)
 {
+	// Throw out expired PSOs before trying to recompile them (saves some time)
+	TrimPipelineStates(currentFrameID);
+
 	for (auto it = m_GraphicsPsoCache.begin(), itEnd = m_GraphicsPsoCache.end(); it != itEnd; )
 	{
 		auto itCurrentPSO = it++;
@@ -634,10 +614,13 @@ void CDeviceObjectFactory::ReloadPipelineStates()
 		}
 	}
 
-	for (auto& it : m_ComputePsoCache)
+	for (auto it = m_ComputePsoCache.begin(), itEnd = m_ComputePsoCache.end(); it != itEnd; )
 	{
-		if (!it.second->Init(it.first))
-			m_InvalidComputePsos.emplace(it.first, it.second);
+		auto itCurrentPSO = it++;
+		const bool success = itCurrentPSO->second->Init(itCurrentPSO->first);
+
+		if (!success)
+			m_InvalidComputePsos.emplace(itCurrentPSO->first, itCurrentPSO->second);
 	}
 }
 
@@ -681,10 +664,10 @@ void CDeviceObjectFactory::UpdatePipelineStates()
 	}
 }
 
-void CDeviceObjectFactory::TrimPipelineStates()
+void CDeviceObjectFactory::TrimPipelineStates(int currentFrameID, int trimBeforeFrameID)
 {
-	EraseUnusedEntriesFromCache(m_GraphicsPsoCache);
-	EraseUnusedEntriesFromCache(m_ComputePsoCache);
+	EraseExpiredEntriesFromCache(m_GraphicsPsoCache, currentFrameID, trimBeforeFrameID);
+	EraseExpiredEntriesFromCache(m_ComputePsoCache,  currentFrameID, trimBeforeFrameID);
 
 	EraseExpiredEntriesFromCache(m_InvalidGraphicsPsos);
 	EraseExpiredEntriesFromCache(m_InvalidComputePsos);

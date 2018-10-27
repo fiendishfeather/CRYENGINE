@@ -69,9 +69,6 @@ public:
 	virtual QuatTS                 GetLocation() const override                       { return m_location; }
 	virtual void                   SetTarget(const ParticleTarget& target) override;
 	virtual void                   Update() override;
-
-	void CheckUpdated();
-
 	virtual void                   EmitParticle(const EmitParticleData* pData = NULL)  override;
 
 	// pfx2 IParticleEmitter
@@ -81,9 +78,11 @@ public:
 	// CParticleEmitter
 	void                      InitSeed();
 	void                      DebugRender(const SRenderingPassInfo& passInfo) const;
-	bool                      UpdateAll();
-	void                      SyncUpdate();
+	void                      CheckUpdated();
+	bool                      UpdateParticles();
+	void                      SyncUpdateParticles();
 	void                      PostUpdate();
+	void                      RenderDeferred(const SRenderContext& renderContext);
 	CParticleContainer&       GetParentContainer()         { return m_parentContainer; }
 	const CParticleContainer& GetParentContainer() const   { return m_parentContainer; }
 	const TRuntimes&          GetRuntimes() const          { return m_componentRuntimes; }
@@ -117,11 +116,11 @@ public:
 	uint                      GetParticleSpec() const;
 
 	void                      SetChanged();
-	bool                      IsStable() const             { return m_time >= m_timeStable; }
+	bool                      IsStable() const             { return m_time > m_timeStable && !m_realBounds.IsReset(); }
 	bool                      IsIndependent() const        { return Unique(); }
 	bool                      HasParticles() const;
 	bool                      HasBounds() const            { return m_bounds.GetVolume() > 0.0f; }
-	bool                      SkipUpdate() const           { return IsStable() && !WasRenderedLastFrame(); }
+	bool                      NeedsUpdate() const          { return ThreadMode() < 3 || !IsStable() || WasRenderedLastFrame(); }
 
 	struct EmitterStats
 	{
@@ -150,7 +149,7 @@ private:
 	CAttributeInstance                     m_attributeInstance;
 	TParticleFeatures                      m_emitterFeatures;
 	AABB                                   m_realBounds;
-	AABB                                   m_maxBounds;
+	AABB                                   m_nextBounds;
 	AABB                                   m_bounds;
 	CParticleContainer                     m_parentContainer;
 	TRuntimes                              m_componentRuntimesFor;

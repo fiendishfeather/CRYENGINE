@@ -110,23 +110,6 @@ public:
 	int    m_nSize;
 };
 
-// Values to combine for phys area type selection
-enum EAreaPhysics
-{
-	Area_Water = BIT(0),
-	Area_Air   = BIT(1),
-	// Other physics media can be masked in as well
-
-	Area_Gravity = BIT(14),
-	Area_Other   = BIT(15),
-};
-
-struct SAreaChangeRecord
-{
-	AABB   boxAffected;         // Area of change
-	uint16 uPhysicsMask;        // Types of mediums for this area
-};
-
 struct SOptimizedOutdoorWindArea
 {
 	int              x0, x1, y0, y1; // 2d rectangle extents for the wind area
@@ -525,7 +508,7 @@ public:
 	                                                     const SVisAreaInfo& info, bool bReregisterObjects);
 	virtual IClipVolume*                   CreateClipVolume();
 	virtual void                           DeleteClipVolume(IClipVolume* pClipVolume);
-	virtual void                           UpdateClipVolume(IClipVolume* pClipVolume, _smart_ptr<IRenderMesh> pRenderMesh, IBSPTree3D* pBspTree, const Matrix34& worldTM, bool bActive, uint32 flags, const char* szName);
+	virtual void                           UpdateClipVolume(IClipVolume* pClipVolume, _smart_ptr<IRenderMesh> pRenderMesh, IBSPTree3D* pBspTree, const Matrix34& worldTM, uint8 viewDistRatio, bool bActive, uint32 flags, const char* szName);
 	virtual void                           ResetParticlesAndDecals();
 	virtual IRenderNode*                   CreateRenderNode(EERType type);
 	virtual void                           DeleteRenderNode(IRenderNode* pRenderNode);

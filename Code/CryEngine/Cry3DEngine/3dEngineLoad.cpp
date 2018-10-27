@@ -192,8 +192,6 @@ bool C3DEngine::InitLevelForEditor(const char* szFolderName, const char* szMissi
 	// recreate particles and decals
 	if (m_pPartManager)
 		m_pPartManager->Reset();
-	if (m_pParticleSystem)
-		static_cast<pfx2::CParticleSystem*>(m_pParticleSystem.get())->Reset();
 
 	// recreate decals
 	SAFE_DELETE(m_pDecalManager);
@@ -354,6 +352,15 @@ void C3DEngine::UnloadLevel()
 		GetRenderer()->FlushRTCommands(true, true, true);
 	}
 
+	//////////////////////////////////////////////////////////////////////////
+	// delete all rendernodes marked for deletion
+	{
+		CryComment("Deleting render nodes");
+		for (int i = 0; i < CRY_ARRAY_COUNT(m_renderNodesToDelete); ++i)
+			TickDelayedRenderNodeDeletion();
+		CryComment("done");
+	}
+
 	// release CGF and materials table
 	for (uint32 i = 0; m_pLevelStatObjTable && i < m_pLevelStatObjTable->size(); i++)
 	{
@@ -419,7 +426,12 @@ void C3DEngine::UnloadLevel()
 		CryComment("done");
 	}
 
-	CRY_ASSERT(m_pClipVolumeManager->GetClipVolumeCount() == 0);
+	// free all clip volumes marked for delete
+	{
+		m_pClipVolumeManager->TrimDeletedClipVolumes();
+		CRY_ASSERT(m_pClipVolumeManager->GetClipVolumeCount() == 0);
+	}
+
 	CRY_ASSERT(!COctreeNode::m_nNodesCounterAll);
 
 	if (m_pWaterWaveManager)
@@ -501,23 +513,11 @@ void C3DEngine::UnloadLevel()
 	}
 
 	//////////////////////////////////////////////////////////////////////////
-	// delete all rendernodes marked for deletion
-	{
-		CryComment("Deleting render nodes");
-		for (int i=0; i<CRY_ARRAY_COUNT(m_renderNodesToDelete); ++i)
-			TickDelayedRenderNodeDeletion();
-		CryComment("done");
-	}
-
-	//////////////////////////////////////////////////////////////////////////
-	if (m_pPartManager || m_pParticleSystem)
+	if (m_pPartManager)
 	{
 		CryComment("Purge particles");
 		// Force to clean all particles that are left, even if still referenced.
-		if (m_pPartManager)
-			m_pPartManager->ClearRenderResources(true);
-		if (m_pParticleSystem)
-			static_cast<pfx2::CParticleSystem*>(m_pParticleSystem.get())->ClearRenderResources();
+		m_pPartManager->ClearRenderResources(true);
 		CryComment("done");
 	}
 
@@ -1301,6 +1301,10 @@ void C3DEngine::LoadEnvironmentSettingsFromXML(XmlNodeRef pInputNode)
 		if (auto cvar = m_pConsole->GetCVar("r_ShadowsCache"))
 		{
 			m_nGsmCache = cvar->GetIVal();
+		}
+		else
+		{
+			m_nGsmCache = 0;
 		}
 	}
 

@@ -317,9 +317,9 @@ void CD3DStereoRenderer::Shutdown()
 #endif
 
 	for (auto &e : m_pEyeDisplayContexts)
-		RecreateDisplayContext(e, Clr_Empty, {});
+		RecreateDisplayContext(e, "", Clr_Empty, {});
 	for (auto &e : m_pVrQuadLayerDisplayContexts)
-		RecreateDisplayContext(e, Clr_Transparent, {});
+		RecreateDisplayContext(e, "", Clr_Transparent, {});
 }
 
 bool CD3DStereoRenderer::EnableStereo()
@@ -445,14 +445,20 @@ void CD3DStereoRenderer::HandleNVControl()
 #endif
 }
 
-void CD3DStereoRenderer::RecreateDisplayContext(std::pair<std::shared_ptr<CCustomRenderDisplayContext>, SDisplayContextKey> &target, const ColorF &clearColor, std::vector<_smart_ptr<CTexture>> &&swapChain)
+void CD3DStereoRenderer::RecreateDisplayContext(std::pair<std::shared_ptr<CCustomRenderDisplayContext>, SDisplayContextKey> &target, std::string name, const ColorF &clearColor, std::vector<_smart_ptr<CTexture>> &&swapChain)
 {
 	IRenderer::SDisplayContextDescription displayContextDesc = {};
 	displayContextDesc.clearColor = clearColor;
 
 	if (target.first)
+	{
+		if (name.empty())
+			name = target.first->GetName();
+
 		gcpRendD3D->DeleteContext(target.second);
-	target.first = swapChain.size() ? std::make_shared<CCustomRenderDisplayContext>(displayContextDesc, gcpRendD3D->GenerateUniqueContextId(), std::move(swapChain)) : nullptr;
+	}
+
+	target.first = swapChain.size() ? std::make_shared<CCustomRenderDisplayContext>(displayContextDesc, name, gcpRendD3D->GenerateUniqueContextId(), std::move(swapChain)) : nullptr;
 	target.second = {};
 	if (target.first)
 		target.second = gcpRendD3D->AddCustomContext(target.first);
@@ -460,12 +466,19 @@ void CD3DStereoRenderer::RecreateDisplayContext(std::pair<std::shared_ptr<CCusto
 
 void CD3DStereoRenderer::CreateEyeDisplayContext(CCamera::EEye eEye, std::vector<_smart_ptr<CTexture>> &&swapChain)
 {
-	RecreateDisplayContext(m_pEyeDisplayContexts[eEye], Clr_Empty, std::move(swapChain));
+	static_assert(CCamera::eEye_eCount <= 2, "More eyes defined than covered in the following code, please adjust.");
+	const std::string name = (eEye == CCamera::EEye::eEye_Left ? "LeftEye-SwapChain" : "RightEye-SwapChain");
+
+	RecreateDisplayContext(m_pEyeDisplayContexts[eEye], name, Clr_Empty, std::move(swapChain));
 }
 
 void CD3DStereoRenderer::CreateVrQuadLayerDisplayContext(RenderLayer::EQuadLayers id, std::vector<_smart_ptr<CTexture>> &&swapChain)
 {
-	RecreateDisplayContext(m_pVrQuadLayerDisplayContexts[id], Clr_Transparent, std::move(swapChain));
+	static_assert(RenderLayer::eQuadLayers_Total <= 9, "More quadlayers defined than covered in the following code, please adjust.");
+	const char number = '0' + id;
+	const std::string name = std::string("Quad") + number + std::string("-SwapChain");
+
+	RecreateDisplayContext(m_pVrQuadLayerDisplayContexts[id], name, Clr_Transparent, std::move(swapChain));
 }
 
 void CD3DStereoRenderer::SetCurrentEyeSwapChainIndices(const std::array<uint32_t, eEyeType_NumEyes> &indices)
@@ -643,12 +656,14 @@ void CD3DStereoRenderer::PrepareFrame()
 {
 	CRY_ASSERT(gRenDev->m_pRT->IsRenderThread());
 
-	if (!m_pHmdRenderer)
+	if (!m_pHmdRenderer || m_framePrepared)
 		return;
 
 	CTimeValue timePresentBegin = gEnv->pTimer->GetAsyncTime();
 	m_pHmdRenderer->PrepareFrame(static_cast<uint64_t>(gcpRendD3D->GetRenderFrameID()));
 	gRenDev->m_fTimeWaitForGPU[gRenDev->GetRenderThreadID()] += gEnv->pTimer->GetAsyncTime().GetDifferenceInSeconds(timePresentBegin);
+
+	m_framePrepared = true;
 }
 
 void CD3DStereoRenderer::RenderScene(const SStereoRenderContext &context)
@@ -662,6 +677,8 @@ void CD3DStereoRenderer::RenderScene(const SStereoRenderContext &context)
 
 	if (!m_pHmdRenderer)
 		return;
+
+	CRY_ASSERT_MESSAGE(!m_framePrepared, "Frame already prepared.");
 
 	// Wait to begin frame, might block
 	PrepareFrame();
@@ -763,32 +780,20 @@ void CD3DStereoRenderer::RenderScene(const SStereoRenderContext &context)
 	}
 
 	m_previousCameras = cameras;
-	m_frameRendered = true;
 }
 
 void CD3DStereoRenderer::SubmitFrameToHMD()
 {
 	CRY_ASSERT(gRenDev->m_pRT->IsRenderThread());
 
-	if (!m_pHmdRenderer || gcpRendD3D->m_bDeviceLost)  // When unloading level, m_bDeviceLost is set to 2
+	// When unloading level, m_bDeviceLost is set to 2
+	if (!m_pHmdRenderer || !m_framePrepared || gcpRendD3D->m_bDeviceLost) 
 		return;
-
-	// Hack: If we have never rendered a frame, clear to black and submit layers
-	// This allows updating layer content during times when we do not render world, menu/loading/etc..
-	if (!m_frameRendered)
-	{
-		ClearEyes(Col_Black);
-
-		// Wait to begin frame, might block
-		CTimeValue timePresentBegin = gEnv->pTimer->GetAsyncTime();
-		m_pHmdRenderer->PrepareFrame(static_cast<uint64_t>(gcpRendD3D->GetRenderFrameID()));
-		gRenDev->m_fTimeWaitForGPU[gRenDev->GetRenderThreadID()] += gEnv->pTimer->GetAsyncTime().GetDifferenceInSeconds(timePresentBegin);
-	}
 
 	m_pHmdRenderer->SubmitFrame();
 
 	m_needClearVrQuadLayer = true;
-	m_frameRendered = false;
+	m_framePrepared = false;
 }
 
 std::pair<EHmdSocialScreen, EHmdSocialScreenAspectMode> CD3DStereoRenderer::GetSocialScreenType() const
@@ -802,7 +807,6 @@ std::pair<EHmdSocialScreen, EHmdSocialScreenAspectMode> CD3DStereoRenderer::GetS
 		socialScreenType = static_cast<EHmdSocialScreen>(pHmdSocialScreenCVar->GetIVal());
 
 	return std::make_pair(socialScreenType, aspectMode);
-
 }
 
 void CD3DStereoRenderer::DisplaySocialScreen()

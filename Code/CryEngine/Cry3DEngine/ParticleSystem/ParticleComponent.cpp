@@ -9,6 +9,7 @@
 #include <CrySerialization/STL.h>
 #include <CrySerialization/IArchive.h>
 #include <CrySerialization/SmartPtr.h>
+#include <CrySerialization/DynArray.h>
 #include <CrySerialization/Math.h>
 
 namespace pfx2
@@ -80,6 +81,7 @@ SComponentParams::SComponentParams()
 	m_renderStateFlags     = OS_ALPHA_BLEND;
 	m_requiredShaderType   = eST_All;
 	m_maxParticleSize      = 0.0f;
+	m_maxParticleAlpha     = 1.0f;
 	m_meshCentered         = false;
 	m_diffuseMap           = "%ENGINE%/EngineAssets/Textures/white.dds";
 	m_particleObjFlags     = 0;
@@ -152,11 +154,15 @@ IParticleFeature* CParticleComponent::GetFeature(uint featureIdx) const
 IParticleFeature* CParticleComponent::AddFeature(uint placeIdx, const SParticleFeatureParams& featureParams)
 {
 	IParticleFeature* pNewFeature = (featureParams.m_pFactory)();
-	m_features.insert(
-	  m_features.begin() + placeIdx,
-	  static_cast<CParticleFeature*>(pNewFeature));
+	m_features.insert(placeIdx, static_cast<CParticleFeature*>(pNewFeature));
 	SetChanged();
 	return pNewFeature;
+}
+
+void CParticleComponent::AddFeature(uint placeIdx, CParticleFeature* pFeature)
+{
+	m_features.insert(placeIdx, pFeature);
+	SetChanged();
 }
 
 void CParticleComponent::AddFeature(CParticleFeature* pFeature)
@@ -218,6 +224,7 @@ void CParticleComponent::SetParent(IParticleComponent* pParentComponent)
 	m_parent = static_cast<CParticleComponent*>(pParentComponent);
 	if (m_parent)
 		stl::push_back_unique(m_parent->m_children, this);
+	SetChanged();
 }
 
 void CParticleComponent::GetMaxParticleCounts(int& total, int& perFrame, float minFPS, float maxFPS) const
@@ -255,29 +262,6 @@ void CParticleComponent::UpdateTimings()
 	if (moreLife > 0.0f)
 	{
 		m_Params.m_maxTotalLIfe += moreLife;
-	}
-}
-
-void CParticleComponent::RenderAll(CParticleEmitter* pEmitter, CParticleComponentRuntime* pRuntime, const SRenderContext& renderContext)
-{
-	CRY_PROFILE_FUNCTION(PROFILE_PARTICLE);
-
-	if (auto* pGPURuntime = pRuntime->GetGpuRuntime())
-	{
-		SParticleStats stats;
-		pGPURuntime->AccumStats(stats);
-		auto& statsGPU = GetPSystem()->GetThreadData().statsGPU;
-		statsGPU.components.rendered += stats.components.rendered;
-		statsGPU.particles.rendered += stats.particles.rendered;
-	}
-
-	Render(pEmitter, pRuntime, this, renderContext);
-		
-	if (RenderDeferred.size())
-	{
-		CParticleJobManager& jobManager = GetPSystem()->GetJobManager();
-		CParticleComponentRuntime* pCpuRuntime = static_cast<CParticleComponentRuntime*>(pRuntime);
-		jobManager.AddDeferredRender(pCpuRuntime, renderContext);
 	}
 }
 
@@ -347,7 +331,7 @@ void CParticleComponent::Compile()
 		{
 			// Validate feature requirements and exclusivity.
 			EFeatureType type = it->GetFeatureType();
-			if (type & (EFT_Life | EFT_Motion | EFT_Render))
+			if (type & (EFT_Life | EFT_Motion | EFT_Render | EFT_Child))
 				if (featureMask & type)
 				{
 					it->SetEnabled(false);
@@ -369,7 +353,7 @@ void CParticleComponent::Compile()
 				{
 					if (auto* feature = params->m_pFactory())
 					{
-						m_defaultFeatures.push_back(pfx2::TParticleFeaturePtr(static_cast<CParticleFeature*>(feature)));
+						m_defaultFeatures.push_back(static_cast<CParticleFeature*>(feature));
 						static_cast<CParticleFeature*>(feature)->AddToComponent(this, &m_Params);
 					}
 				}
@@ -415,7 +399,7 @@ IMaterial* CParticleComponent::MakeMaterial()
 	{
 		const char* shaderName = UsesGPU() ? "Particles.ParticlesGpu" : "Particles";
 		const string& diffuseMap = m_Params.m_diffuseMap;
-		static uint32 textureLoadFlags = 0;//FT_DONT_STREAM;
+		const uint32 textureLoadFlags = 0;//FT_DONT_STREAM;
 		ITexture* pTexture = gEnv->pRenderer->EF_GetTextureByName(diffuseMap.c_str(), textureLoadFlags);
 		if (!pTexture)
 		{
