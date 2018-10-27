@@ -3009,7 +3009,7 @@ CFlashTextureSourceBase::CFlashTextureSourceBase(const char* pFlashFileName, con
 					CFlashPlayerInstanceWrapper* pInstanceWrapper = new CFlashPlayerInstanceWrapper();
 					pInstanceWrapper->SetBootStrapper(pBootStrapper);
 					pInstanceWrapper->CreateInstance(this);
-					pInstanceWrapper->Activate(true,this);
+					//pInstanceWrapper->Activate(true,this);
 					m_pFlashPlayer = pInstanceWrapper;
 					valid = true;
 				}
