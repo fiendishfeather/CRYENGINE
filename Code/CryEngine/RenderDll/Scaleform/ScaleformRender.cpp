@@ -742,6 +742,11 @@ bool CD3D9Renderer::SF_UpdateTexture(int texId, int mipLevel, int numRects, cons
 	CTexture* pTexture(CTexture::GetByID(texId));
 	assert(pTexture);
 
+	if (pTexture == nullptr)
+	{
+		return false;
+	}
+
 	if (pTexture->GetTextureType() != eTT_2D || pTexture->GetDstFormat() != eSrcFormat)
 	{
 		assert(0);
