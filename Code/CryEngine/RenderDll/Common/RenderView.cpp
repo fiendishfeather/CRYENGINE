@@ -2295,7 +2295,7 @@ void CRenderView::CheckAndScheduleForUpdate(const SShaderItem& shaderItem) threa
 
 	if (pSR && pShader)
 	{
-		if (pSR->HasDynamicTexModifiers() || pSR->HasAnimatedTextures())
+		if (pSR->HasDynamicTexModifiers() || pSR->HasAnimatedTextures() || pSR->HasDynamicUpdates())
 		{
 			if (CryInterlockedExchange((volatile LONG*)&pSR->m_nUpdateFrameID, (uint32)m_frameId) != (uint32)m_frameId)
 			{
