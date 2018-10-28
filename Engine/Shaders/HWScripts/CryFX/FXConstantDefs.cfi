@@ -13,31 +13,67 @@
 // PI - Per-Instance
 // PM - Per-Material
 
-
+//add offset when adding texture slots (+2 for each slot)
+//default: #define REG_PM_DIFFUSE_COL          c28
 // Per-Material Constant Buffer - Fixed constants
-#define REG_PM_DIFFUSE_COL          c28
-#define REG_PM_SPECULAR_COL         c29
-#define REG_PM_EMISSIVE_COL         c30
-#define REG_PM_TCM_MATRIX           c31
-#define REG_PM_DEFORM_WAVE          c35
-#define REG_PM_DETAIL_TILING        c36
-#define REG_PM_SILPOM_DETAIL_PARAMS c37
+#define REG_PM_DIFFUSE_COL          c76
+#define REG_PM_SPECULAR_COL         c77
+#define REG_PM_EMISSIVE_COL         c78
+#define REG_PM_TCM_MATRIX           c79
+#define REG_PM_DEFORM_WAVE          c83
+#define REG_PM_DETAIL_TILING        c84
+#define REG_PM_SILPOM_DETAIL_PARAMS c85
 
 // Per-Material Constant Buffer - Tweakables in cfi files
-#define REG_PM_PARAM_INCL_0  c38
-#define REG_PM_PARAM_INCL_1  c39
-#define REG_PM_PARAM_INCL_2  c40
-#define REG_PM_PARAM_INCL_3  c41
+#define REG_PM_PARAM_INCL_0  c86
+#define REG_PM_PARAM_INCL_1  c87
+#define REG_PM_PARAM_INCL_2  c88
+#define REG_PM_PARAM_INCL_3  c89
 
 // Per-Material Constant Buffer - Tweakables in cfx files
-#define REG_PM_PARAM_0  c42
-#define REG_PM_PARAM_1  c43
-#define REG_PM_PARAM_2  c44
-#define REG_PM_PARAM_3  c45
-#define REG_PM_PARAM_4  c46
-#define REG_PM_PARAM_5  c47
-#define REG_PM_PARAM_6  c48
-#define REG_PM_PARAM_7  c49
+#define REG_PM_PARAM_0  c90
+#define REG_PM_PARAM_1  c91
+#define REG_PM_PARAM_2  c92
+#define REG_PM_PARAM_3  c93
+#define REG_PM_PARAM_4  c94
+#define REG_PM_PARAM_5  c95
+#define REG_PM_PARAM_6  c96
+#define REG_PM_PARAM_7  c97
+#define REG_PM_PARAM_8  c98
+#define REG_PM_PARAM_9  c99
+#define REG_PM_PARAM_10  c100
+#define REG_PM_PARAM_11  c101
+#define REG_PM_PARAM_12  c102
+#define REG_PM_PARAM_13  c103
+#define REG_PM_PARAM_14  c104
+#define REG_PM_PARAM_15  c105
+#define REG_PM_PARAM_16  c106
+#define REG_PM_PARAM_17  c107
+#define REG_PM_PARAM_18  c108
+#define REG_PM_PARAM_19  c109
+#define REG_PM_PARAM_20  c110
+#define REG_PM_PARAM_21  c111
+#define REG_PM_PARAM_22  c112
+#define REG_PM_PARAM_23  c113
+#define REG_PM_PARAM_24  c114
+#define REG_PM_PARAM_25  c115
+#define REG_PM_PARAM_26  c116
+#define REG_PM_PARAM_27  c117
+#define REG_PM_PARAM_28  c118
+#define REG_PM_PARAM_29  c119
+#define REG_PM_PARAM_30  c120
+#define REG_PM_PARAM_31  c121
+#define REG_PM_PARAM_32  c122
+#define REG_PM_PARAM_33  c123
+#define REG_PM_PARAM_34  c124
+#define REG_PM_PARAM_35  c125
+#define REG_PM_PARAM_36  c126
+#define REG_PM_PARAM_37  c127
+#define REG_PM_PARAM_38  c128
+#define REG_PM_PARAM_39  c129
+#define REG_PM_PARAM_40  c130
+#define REG_PM_PARAM_41  c131
+
 
 float4   MatDifColor                 : PM_MatDiffuseColor             < register = REG_PM_DIFFUSE_COL; >;
 float4   MatSpecColor                : PM_MatSpecularColor            < register = REG_PM_SPECULAR_COL; >;

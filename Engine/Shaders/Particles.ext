@@ -19,6 +19,17 @@ Version (1.00)
 
 Property
 {
+  Name = %DIFFUSE_MAP
+  Mask = 0x2
+  Property    (Diffuse map)
+  Description (Use diffuse map)
+  DependencySet = $TEX_Diffuse
+  DependencyReset = $TEX_Diffuse
+  Hidden
+}
+
+Property
+{
   Name = %REFRACTION
   Mask = 0x4
   Property    (Refraction)

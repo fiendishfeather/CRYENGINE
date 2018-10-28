@@ -17,7 +17,64 @@
 #define OPACITYMAP            Texture2D   opacityTex          : register(t11)                                   = TM_Opacity;
 #define TRANSLUCENCYMAP       Texture2D   translucencyTex     : register(t12)                                   = TM_Translucency;
 #define EMITTANCEMAP          Texture2D   emittanceTex        : register(t13)                                   = TM_Emittance;
-#define flowTex               detailTex  
+#define	flowTex               detailTex  
+//additional slots start at t100 | 128 is max
+#define LAYER1DIFFUSEMAP      Texture2D   layer1DiffuseTex    : register(t100)                                  = TM_Layer1_Diffuse;
+#define LAYER1NORMALMAP       Texture2D   layer1NormalsTex    : register(t101)                                  = TM_Layer1_Normals;
+#define LAYER2DIFFUSEMAP      Texture2D   layer2DiffuseTex    : register(t102)                                  = TM_Layer2_Diffuse;
+#define LAYER2NORMALMAP       Texture2D   layer2NormalsTex    : register(t103)                                  = TM_Layer2_Normals;
+#define LAYER3DIFFUSEMAP      Texture2D   layer3DiffuseTex    : register(t104)                                  = TM_Layer3_Diffuse;
+#define LAYER3NORMALMAP       Texture2D   layer3NormalsTex    : register(t105)                                  = TM_Layer3_Normals;
+#define LAYER4DIFFUSEMAP      Texture2D   layer4DiffuseTex    : register(t106)                                  = TM_Layer4_Diffuse;
+#define LAYER4NORMALMAP       Texture2D   layer4NormalsTex    : register(t107)                                  = TM_Layer4_Normals;
+
+#define LAYER1WTDIFFUSEMAP    Texture2D   layer1WTDiffuseTex  : register(t108)                                  = TM_Layer1_WT_Diffuse;
+#define LAYER1WTNORMALMAP     Texture2D   layer1WTNormalsTex  : register(t109)                                  = TM_Layer1_WT_Normals;
+#define LAYER2WTDIFFUSEMAP    Texture2D   layer2WTDiffuseTex  : register(t110)                                  = TM_Layer2_WT_Diffuse;
+#define LAYER2WTNORMALMAP     Texture2D   layer2WTNormalsTex  : register(t111)                                  = TM_Layer2_WT_Normals;
+#define LAYER3WTDIFFUSEMAP    Texture2D   layer3WTDiffuseTex  : register(t112)                                  = TM_Layer3_WT_Diffuse;
+#define LAYER3WTNORMALMAP     Texture2D   layer3WTNormalsTex  : register(t113)                                  = TM_Layer3_WT_Normals;
+#define LAYER4WTDIFFUSEMAP    Texture2D   layer4WTDiffuseTex  : register(t114)                                  = TM_Layer4_WT_Diffuse;
+#define LAYER4WTNORMALMAP     Texture2D   layer4WTNormalsTex  : register(t115)                                  = TM_Layer4_WT_Normals;
+
+#define LAYER1SMOOTHNESSMAP   Texture2D   layer1SmoothnessTex : register(t116)                                  = TM_Layer1_Smoothness;
+#define LAYER2SMOOTHNESSMAP   Texture2D   layer2SmoothnessTex : register(t117)                                  = TM_Layer2_Smoothness;
+#define LAYER3SMOOTHNESSMAP   Texture2D   layer3SmoothnessTex : register(t118)                                  = TM_Layer3_Smoothness;
+#define LAYER4SMOOTHNESSMAP   Texture2D   layer4SmoothnessTex : register(t119)                                  = TM_Layer4_Smoothness;
+
+#define LAYER1WTSMOOTHNESSMAP Texture2D   layer1WTSmoothnessTex : register(t120)                                = TM_Layer1_WT_Smoothness;
+#define LAYER2WTSMOOTHNESSMAP Texture2D   layer2WTSmoothnessTex : register(t121)                                = TM_Layer2_WT_Smoothness;
+#define LAYER3WTSMOOTHNESSMAP Texture2D   layer3WTSmoothnessTex : register(t122)                                = TM_Layer3_WT_Smoothness;
+#define LAYER4WTSMOOTHNESSMAP Texture2D   layer4WTSmoothnessTex : register(t123)                                = TM_Layer4_WT_Smoothness;
+
+// #define LAYER1DIFFUSEMAP      Texture2D   layer1DiffuseTex    : register(t14)                                  = TM_Layer1_Diffuse;
+// #define LAYER1NORMALMAP       Texture2D   layer1NormalsTex    : register(t15)                                  = TM_Layer1_Normals;
+// #define LAYER2DIFFUSEMAP      Texture2D   layer2DiffuseTex    : register(t16)                                  = TM_Layer2_Diffuse;
+// #define LAYER2NORMALMAP       Texture2D   layer2NormalsTex    : register(t17)                                  = TM_Layer2_Normals;
+// #define LAYER3DIFFUSEMAP      Texture2D   layer3DiffuseTex    : register(t18)                                  = TM_Layer3_Diffuse;
+// #define LAYER3NORMALMAP       Texture2D   layer3NormalsTex    : register(t19)                                  = TM_Layer3_Normals;
+// #define LAYER4DIFFUSEMAP      Texture2D   layer4DiffuseTex    : register(t20)                                  = TM_Layer4_Diffuse;
+// #define LAYER4NORMALMAP       Texture2D   layer4NormalsTex    : register(t21)                                  = TM_Layer4_Normals;
+
+// #define LAYER1WTDIFFUSEMAP    Texture2D   layer1WTDiffuseTex  : register(t22)                                  = TM_Layer1_WT_Diffuse;
+// #define LAYER1WTNORMALMAP     Texture2D   layer1WTNormalsTex  : register(t23)                                  = TM_Layer1_WT_Normals;
+// #define LAYER2WTDIFFUSEMAP    Texture2D   layer2WTDiffuseTex  : register(t24)                                  = TM_Layer2_WT_Diffuse;
+// #define LAYER2WTNORMALMAP     Texture2D   layer2WTNormalsTex  : register(t25)                                  = TM_Layer2_WT_Normals;
+// #define LAYER3WTDIFFUSEMAP    Texture2D   layer3WTDiffuseTex  : register(t26)                                  = TM_Layer3_WT_Diffuse;
+// #define LAYER3WTNORMALMAP     Texture2D   layer3WTNormalsTex  : register(t27)                                  = TM_Layer3_WT_Normals;
+// #define LAYER4WTDIFFUSEMAP    Texture2D   layer4WTDiffuseTex  : register(t28)                                  = TM_Layer4_WT_Diffuse;
+// #define LAYER4WTNORMALMAP     Texture2D   layer4WTNormalsTex  : register(t29)                                  = TM_Layer4_WT_Normals;
+
+// #define LAYER1SMOOTHNESSMAP   Texture2D   layer1SmoothnessTex : register(t30)                                  = TM_Layer1_Smoothness;
+// #define LAYER2SMOOTHNESSMAP   Texture2D   layer2SmoothnessTex : register(t31)                                  = TM_Layer2_Smoothness;
+// #define LAYER3SMOOTHNESSMAP   Texture2D   layer3SmoothnessTex : register(t32)                                  = TM_Layer3_Smoothness;
+// #define LAYER4SMOOTHNESSMAP   Texture2D   layer4SmoothnessTex : register(t33)                                  = TM_Layer4_Smoothness;
+
+// #define LAYER1WTSMOOTHNESSMAP Texture2D   layer1WTSmoothnessTex : register(t34)                                = TM_Layer1_WT_Smoothness;
+// #define LAYER2WTSMOOTHNESSMAP Texture2D   layer2WTSmoothnessTex : register(t35)                                = TM_Layer2_WT_Smoothness;
+// #define LAYER3WTSMOOTHNESSMAP Texture2D   layer3WTSmoothnessTex : register(t36)                                = TM_Layer3_WT_Smoothness;
+// #define LAYER4WTSMOOTHNESSMAP Texture2D   layer4WTSmoothnessTex : register(t37)                                = TM_Layer4_WT_Smoothness;
+
 
 // GBuffer per pass textures.
 #define PERLIN_NOISE_MAP      Texture2D   perlinNoiseTex      : register(t25)                                   = "%ENGINE%/EngineAssets/Textures/perlinNoise2D.dds";
@@ -30,6 +87,8 @@
 
 // Forward/Custom per-pass textures
 #define SCENE_DEPTH_MAP       Texture2D   linearDepthTex      : register(t32)                                   = TS_ZTarget;
+//#define SCENE_DIFFUSE_MAP     Texture2D   sceneDiffuseTex     : register(t34)                                   = TS_SceneDiffuse;
+//#define SCENE_TARGET_MAP      Texture2D   sceneTargetTex      : register(t35)                                   = TS_SceneTarget;
 #define NOISE_3D_MAP          Texture3D   noise3DTex          : register(t39)                                   = "%ENGINE%/EngineAssets/Textures/noise3d.dds";
 
 // Forward etc

@@ -32,7 +32,7 @@ HS_CONTROL_POINT_OUTPUT_ZPASS Common_ZPassHS(InputPatch<vert2fragZ, 3> inputPatc
 	output.vBinormal            = inputPatch[uCPID].vBinormal;
 #endif
 	output.vNormalWS            = inputPatch[uCPID].vNormalWS;
-#if %VERTCOLORS || %BLENDLAYER
+#if %VERTCOLORS || %BLENDLAYER || %BLENDLAYERLB
 	output.Color                = inputPatch[uCPID].Color;
 #endif
 #if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING || %PARALLAX_OCCLUSION_MAPPING || %OFFSET_BUMP_MAPPING	 || %_RT_ALPHABLEND
@@ -55,7 +55,7 @@ void FillEvalInput(in const OutputPatch<HS_CONTROL_POINT_OUTPUT_ZPASS, 3> triPat
 #if (!%GRASS && !%TEMP_TERRAIN) || %_RT_ALPHABLEND 
 	FillEvalInputTangentBinormal(triPatch[0].vTangent, triPatch[1].vTangent, triPatch[2].vTangent, triPatch[0].vBinormal.xyzz, triPatch[1].vBinormal.xyzz, triPatch[2].vBinormal.xyzz, evalInput);
 #endif
-#if %VERTCOLORS || %BLENDLAYER
+#if %VERTCOLORS || %BLENDLAYER || %BLENDLAYERLB
 	FillEvalInputColor(triPatch[0].Color, triPatch[1].Color, triPatch[2].Color, evalInput);
 #endif
 	evalInput.vViewPos = g_VS_WorldViewPos.xyz;
@@ -68,7 +68,7 @@ void ProcessEvalOutput(in CommonEvaluationOutputDS evalOutput, inout vert2fragZ 
 	dsOutput.vTangent = evalOutput.vTangent;
 	dsOutput.vBinormal = evalOutput.vBinormal;
 #endif
-#if %VERTCOLORS || %BLENDLAYER
+#if %VERTCOLORS || %BLENDLAYER || %BLENDLAYERLB
 	dsOutput.Color = evalOutput.vColor;
 #endif
 

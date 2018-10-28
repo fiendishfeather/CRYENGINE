@@ -1,0 +1,1241 @@
+// Copyright 2001-2018 Crytek GmbH. All rights reserved.
+// Heavily modified Illum Shader to work with RGBA masking layers for high-res character textures
+// Last Updated: 15MAY2018 by TJ Long: Minor Code Cleanup
+
+#include "Common.cfi"
+#include "IllumValidations.cfi"
+
+// Shader global descriptions
+float Script : STANDARDSGLOBAL
+<
+	string Script =        
+		"Public;"
+	#if %DECAL
+		"Decal;"
+	#endif     
+	#if %VERTCOLORS
+		"VertexColors"
+	#endif
+	#if %BILLBOARD
+		"Billboard"
+	#endif
+	#if ENABLE_TESSELLATION
+		"HWTessellation;"
+	#endif
+		"SupportsDeferredShading;"
+		"SupportsFullDeferredShading;"
+		"SupportsAttrInstancing;"
+		"ShaderDrawType = Light;"
+		"ShaderType = General;"
+>;
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////// Custom shading pass structure /////////////////////////////////////
+
+struct CustomForwardShadingAttribs
+{
+};
+
+Texture2D emittanceTex : register(t13)
+<
+  UIName = "Emittance";
+  UIDescription = "Emittance color/intensity map";
+> = TM_Emittance;
+
+#if %DETAIL_MAPPING
+	Texture2D diffuseTex : register(t0)
+	<
+	  UIName = "Wear/Dirt/AO Map";
+	  UIDescription = "Wear/Dirt/AO Map";  
+	  sRGBLookup = true;
+	> = TM_Diffuse;
+
+	#if %HIGHRES_LAYERS
+		LAYER1WTDIFFUSEMAP
+		LAYER1WTNORMALMAP 
+		LAYER1WTSMOOTHNESSMAP
+	#endif
+
+	#if %BLENDLAYER
+		LAYER2WTDIFFUSEMAP
+		LAYER2WTNORMALMAP 
+		LAYER2WTSMOOTHNESSMAP
+		LAYER3WTDIFFUSEMAP
+		LAYER3WTNORMALMAP 
+		LAYER3WTSMOOTHNESSMAP
+		LAYER4WTDIFFUSEMAP
+		LAYER4WTNORMALMAP
+		LAYER4WTSMOOTHNESSMAP
+	#endif
+#endif
+
+#if %HIGHRES_LAYERS && !%BLENDLAYER
+	Texture2D normalsTex : register(t1)
+	<
+	  UIName = "Normal Map";
+	  UIDescription = "Normalmap";  
+	  sRGBLookup = true;
+	> = TM_Normals; 
+
+	Texture2D smoothness2Tex : register(t7) = TM_DecalOverlay;
+	
+	//RGBA Layers
+	LAYER1DIFFUSEMAP
+	LAYER1NORMALMAP
+	LAYER1SMOOTHNESSMAP
+#endif
+
+#if %BLENDLAYER
+	//Shared with BLENDLAYER active
+	Texture2D normalsTex : register(t1)
+	<
+	  UIName = "Shared NormalMap";
+	  UIDescription = " Shared NormalMap for all layers";  
+	  sRGBLookup = true;
+	> = TM_Normals;
+
+	Texture2D specularTex : register(t2)  = TM_Specular;
+
+	Texture2D decalTex : register(t7) = TM_DecalOverlay;
+
+	Texture2D opacityTex : register(t11)
+	<
+	  UIName = "RGBA Blending Map";
+	  UIDescription = "Texture slot for the RGBA mask";  
+	> = TM_Opacity;
+	 
+	//RGBA Layers
+	LAYER1DIFFUSEMAP
+	LAYER1NORMALMAP
+	LAYER2DIFFUSEMAP
+	LAYER2NORMALMAP 
+	LAYER3DIFFUSEMAP
+	LAYER3NORMALMAP 
+	LAYER4DIFFUSEMAP
+	LAYER4NORMALMAP
+
+	//RGBA Smoothness (Normalmap Alpha)
+	LAYER1SMOOTHNESSMAP
+	LAYER2SMOOTHNESSMAP
+	LAYER3SMOOTHNESSMAP
+	LAYER4SMOOTHNESSMAP
+#endif
+
+#if %DECAL && !%BLENDLAYER
+	Texture2D DecalOpacityTex : register(t11)
+	<
+	  UIName = "Decal Opacity Map";
+	  UIDescription = "Opacity map for decal";
+	> = TM_Opacity;
+#endif
+
+
+ENVIRONMENTCUBEMAP
+DISSOLVE_NOISE_MAP
+
+#include "ShadeLib.cfi"
+
+// Tweakables /////////////////
+
+//TODO: Possibly depecate since the LB files don't appear to ever use it
+float EmittanceMapGamma
+<
+  register = REG_PM_PARAM_0.x;
+  //string UIWidget = "slider";
+  //string UIName = " Emittance Map Gamma";
+  //string UIDescription = "Expand range of emittance texture";
+  //float UIMin = 1.0;
+  //float UIMax = 2.0;
+  //float UIStep = 0.1;
+> = 1.0;
+
+//TODO: Deprecate since we don't use it in this shader
+#if %OFFSET_BUMP_MAPPING
+	float ObmDisplacement
+	<
+	  register = REG_PM_PARAM_0.y;
+	  string UIWidget = "slider";
+	  string UIName = "OBM Displacement";
+	  float UIMin = 0.0;
+	  float UIMax = 0.025;
+	  float UIStep = 0.001;
+	> = 0.004;
+#endif
+
+//TODO: Deprecate since we don't use it in this shader
+#if %PARALLAX_OCCLUSION_MAPPING
+	float PomDisplacement
+	<
+	  register = REG_PM_PARAM_0.z;
+	  string UIWidget = "slider";
+	  string UIName = "POM Displacement";
+	  float UIMin = 0.0;
+	  float UIMax = 0.05;
+	  float UIStep = 0.001;
+	> = 0.025;
+#endif
+
+//TODO: Deprecate since we don't use it in this shader
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+	float SilPomDisplacement
+	<
+	  register = REG_PM_PARAM_0.w;
+	  string UIWidget = "slider";
+	  string UIName = "Silhouette POM Displacement";
+	  float UIMin = 0.001;
+	  float UIMax = 10.0;
+	  float UIStep = 0.001;
+	> = 0.025;
+
+	float SilPomNumSteps
+	<
+	  register = REG_PM_PARAM_1.x;
+	  string UIWidget = "slider";
+	  string UIName = "Silhouette POM Number of steps";
+	  float UIMin = 4.0;
+	  float UIMax = 512.0;
+	  float UIStep = 1.0;
+	> = 256.0;
+
+	float SilPomStepSizeViewDep
+	<
+	  register = REG_PM_PARAM_1.y;
+	  string UIWidget = "slider";
+	  string UIName = "Silhouette POM Step size view independence";
+	  float UIMin = 1.0;
+	  float UIMax = 10.0;
+	  float UIStep = 0.1;
+	> = 1.0;
+#endif
+
+//TODO: Deprecate since we don't use it in this shader
+#if %OFFSET_BUMP_MAPPING || %PARALLAX_OCCLUSION_MAPPING || %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+	float HeightBias
+	<
+	  register = REG_PM_PARAM_1.z;
+	  string UIWidget = "slider";
+	  string UIName = "Height bias";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.05;
+	> = 1.0;
+
+	float SelfShadowStrength
+	<
+	  register = REG_PM_PARAM_1.w;
+	  string UIWidget = "slider";
+	  string UIName = "Self shadow strength";
+	  float UIMin = 0.0;
+	  float UIMax = 5.0;
+	  float UIStep = 0.1;
+	> = 3.0;
+#endif
+
+//Triggers Layer 1 and Global Options
+#if %DETAIL_MAPPING
+
+	float WearScale
+	<
+	  register = REG_PM_PARAM_2.x;
+	  string UIHelp = "Set Wear detail blend scale";                     
+	  string UIName = "Global Wear Scale";    	  
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 10.0;
+	  float UIStep = 0.001;
+	> = 10;
+	
+	float DirtScale
+	<
+	  register = REG_PM_PARAM_2.y;
+	  string UIHelp = "Set dirt detail blend scale";                     
+	  string UIName = "Global Dirt Scale";    	  
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 10.0;
+	  float UIStep = 0.001;
+	> = 10;
+	
+	float WearBlendFalloff
+	<
+	  register = REG_PM_PARAM_2.z;
+	  string UIHelp = "Set Wear detail blend falloff";                     
+	  string UIName = "Global Wear Intensity";    	  
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.001;
+	> = 0.5;
+	
+	float DirtBlendFalloff
+	<
+	  register = REG_PM_PARAM_2.w;
+	  string UIHelp = "Set dirt detail blend falloff";                     
+	  string UIName = "Global Dirt Intensity";    	  
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.001;
+	> = 0.5;
+	
+	float TilingScaleWear1
+	<
+	  register = REG_PM_PARAM_41.x;
+	  string UIHelp = "Wear 1 Tiling";
+	  string UIName = "Layer 1 Wear Tiling";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 200.0;
+	  float UIStep = 0.2;
+	> = 1.0;
+
+	float4 WearDiff1
+	<
+	  register = REG_PM_PARAM_17;
+	  string UIHelp = "change wear layer1 diffuse";                   
+	  string UIName = "Layer 1 Wear Color (Diffuse)";    
+	  string UIWidget = "color";
+	> = {0.0, 0.0, 0.0, 0.0};
+	
+	float4 WearSpec1
+	<
+	  register = REG_PM_PARAM_18;
+	  string UIHelp = "change wear layer1 specular";                   
+	  string UIName = "Layer 1 Wear Color (Specular)";    
+	  string UIWidget = "color";
+	> = {0.0, 0.0, 0.0, 0.0};
+	
+	float4 DiffuseTintWear1
+	<
+	  register = REG_PM_PARAM_36;
+	  string UIHelp = "change wear layer1 tint";                   
+	  string UIName = "Layer 1 Wear Color (Tint)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+	
+	float4 GlossMultWear1
+	<
+	  register = REG_PM_PARAM_19.x;
+	  string UIHelp = "change wear layer1 smoothness";                   
+	  string UIName = "Layer 1 Wear Smoothness";    
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.1;
+	> = 1.0;
+	
+	float4 WearTearMaskTiling
+	<
+	  register = REG_PM_PARAM_19.y;
+	  string UIHelp = "Tiling of the WDA map. This will usually always be 1;                   
+	  string UIName = "Global Wear/Dirt Tiling";    
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 10.0;
+	  float UIStep = 1.0;
+	> = 1.0;
+	
+	float4 DirtColor
+	<
+	  register = REG_PM_PARAM_29;
+	  string UIHelp = "Global Dirt Color";                   
+	  string UIName = "Global Dirt Color";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+
+	//Triggers Layers 2-4 Options
+	#if %BLENDLAYER
+		float TilingScaleWear2
+		<
+		  register = REG_PM_PARAM_41.y;
+		  string UIHelp = "Wear 2 Tiling";
+		  string UIName = "Layer 2 Wear Tiling";
+		  string UIWidget = "slider";
+		  float UIMin = 0.0;
+		  float UIMax = 200.0;
+		  float UIStep = 0.2;
+		> = 1.0;
+
+		float TilingScaleWear3
+		<
+		  register = REG_PM_PARAM_41.z;
+		  string UIHelp = "Wear 3 Tiling";
+		  string UIName = "Layer 3 Wear Tiling";
+		  string UIWidget = "slider";
+		  float UIMin = 0.0;
+		  float UIMax = 200.0;
+		  float UIStep = 0.2;
+		> = 1.0;
+
+		float TilingScaleWear4
+		<
+		  register = REG_PM_PARAM_41.w;
+		  string UIHelp = "Wear 4 Tiling";
+		  string UIName = "Layer 4 Wear Tiling";
+		  string UIWidget = "slider";
+		  float UIMin = 0.0;
+		  float UIMax = 200.0;
+		  float UIStep = 0.2;
+		> = 1.0;
+
+		float4 WearDiff2
+		<
+		  register = REG_PM_PARAM_30;
+		  string UIHelp = "change wear layer2 diffuse";                   
+		  string UIName = "Layer 2 Wear Color (Diffuse)";    
+		  string UIWidget = "color";
+		> = {0.0, 0.0, 0.0, 0.0};
+		
+		float4 WearDiff3
+		<
+		  register = REG_PM_PARAM_31;
+		  string UIHelp = "change wear layer3 diffuse";                   
+		  string UIName = "Layer 3 Wear Color (Diffuse)";    
+		  string UIWidget = "color";
+		> = {0.0, 0.0, 0.0, 0.0};
+		
+		float4 WearDiff4
+		<
+		  register = REG_PM_PARAM_32;
+		  string UIHelp = "change wear layer4 diffuse";                   
+		  string UIName = "Layer 4 Wear Color (Diffuse)";    
+		  string UIWidget = "color";
+		> = {0.0, 0.0, 0.0, 0.0};
+		
+		float4 WearSpec2
+		<
+		  register = REG_PM_PARAM_33;
+		  string UIHelp = "change wear layer2 specular";                   
+		  string UIName = "Layer 2 Wear Color (Specular)";    
+		  string UIWidget = "color";
+		> = {0.0, 0.0, 0.0, 0.0};
+		
+		float4 WearSpec3
+		<
+		  register = REG_PM_PARAM_34;
+		  string UIHelp = "change wear layer3 specular";                   
+		  string UIName = "Layer 3 Wear Color (Specular)";    
+		  string UIWidget = "color";
+		> = {0.0, 0.0, 0.0, 0.0};
+		
+		float4 WearSpec4
+		<
+		  register = REG_PM_PARAM_35;
+		  string UIHelp = "change wear layer4 specular";                   
+		  string UIName = "Layer 4 Wear Color (Specular)";    
+		  string UIWidget = "color";
+		> = {0.0, 0.0, 0.0, 0.0};
+		
+		float4 DiffuseTintWear2
+		<
+		  register = REG_PM_PARAM_37;
+		  string UIHelp = "change wear layer2 tint";                   
+		  string UIName = "Layer 2 Wear Color (Tint)";    
+		  string UIWidget = "color";
+		> = {1.0, 1.0, 1.0, 1.0};
+		
+		float4 DiffuseTintWear3
+		<
+		  register = REG_PM_PARAM_38;
+		  string UIHelp = "change wear layer3 tint";                   
+		  string UIName = "Layer 3 Wear Color (Tint)";    
+		  string UIWidget = "color";
+		> = {1.0, 1.0, 1.0, 1.0};
+		
+		float4 DiffuseTintWear4
+		<
+		  register = REG_PM_PARAM_39;
+		  string UIHelp = "change wear layer4 tint";                   
+		  string UIName = "Layer 4 Wear Color (Tint)";    
+		  string UIWidget = "color";
+		> = {1.0, 1.0, 1.0, 1.0};
+		
+		float4 GlossMultWear2
+		<
+		  register = REG_PM_PARAM_40.x;
+		  string UIHelp = "change wear layer2 smoothness";                   
+		  string UIName = "Layer 2 Wear Smoothness";    
+		  string UIWidget = "slider";
+		  float UIMin = 0.0;
+		  float UIMax = 1.0;
+		  float UIStep = 0.1;
+		> = 1.0;
+		
+		float4 GlossMultWear3
+		<
+		  register = REG_PM_PARAM_40.y;
+		  string UIHelp = "change wear layer3 smoothness";                   
+		  string UIName = "Layer 3 Wear Smoothness";    
+		  string UIWidget = "slider";
+		  float UIMin = 0.0;
+		  float UIMax = 1.0;
+		  float UIStep = 0.1;
+		> = 1.0;
+		
+		float4 GlossMultWear4
+		<
+		  register = REG_PM_PARAM_40.z;
+		  string UIHelp = "change wear layer4 smoothness";                   
+		  string UIName = "Layer 4 Wear Smoothness";    
+		  string UIWidget = "slider";
+		  float UIMin = 0.0;
+		  float UIMax = 1.0;
+		  float UIStep = 0.1;
+		> = 1.0;
+	#endif
+
+#endif
+
+//This triggers layers 2-4 options
+#if %BLENDLAYER
+	//TODO: Hide or deprecate me
+	float BlendFactor
+	<
+	  register = REG_PM_PARAM_5.x;
+	  //string UIHelp = "Change visbility of blended layer";
+	  //string UIName = "Blend Factor";
+	  //string UIWidget = "slider";
+	  //float UIMin = 0.0;
+	  //float UIMax = 16.0;
+	  //float UIStep = 0.2;
+	> = 1.0;
+
+	//TODO: Hide or Deprecate me as I should always be 1
+	float BlendLayer2Tiling
+	<
+	  //register = REG_PM_PARAM_5.y;
+	  //string UIHelp = "Change tiling of 2nd blend layer";
+	  //string UIName = "Blend Layer 2 Tiling";
+	  //string UIWidget = "slider";
+	  //float UIMin = 0.0;
+	  //float UIMax = 20.0;
+	  //float UIStep = 0.005;
+	> = 1.0;
+
+	//TODO: Deprecate Me unless Dymek uses it for dynamic blending
+	float BlendFalloff
+	<
+	  register = REG_PM_PARAM_5.z;
+	  //string UIHelp = "Change falloff of blending";
+	  //string UIName = "Blend Falloff";
+	  //string UIWidget = "slider";
+	  //float UIMin = 0.1;
+	  //float UIMax = 1024.0;
+	  //float UIStep = 1.0;
+	> = 1024.0;
+
+	//TODO: Hide or deprecate me as NormalMaps shouldnt blend?
+	float BlendFalloffBump
+	<
+	  register = REG_PM_PARAM_8.z;
+	  //string UIHelp = "Change falloff of (bump) blending";
+	  //string UIName = "Blend (bump) Falloff";
+	  //string UIWidget = "slider";
+	  //float UIMin = 0.1;
+	  //float UIMax = 128.0;
+	  //float UIStep = 1.0;
+	> = 32.0;
+
+	//Deprecate Me: BlendMask does NOT use Spec
+	float BlendLayer2Specular
+	<
+	  register = REG_PM_PARAM_5.w;
+	  //string UIHelp = "Change specular intensity of 2nd blend layer";
+	  //string UIName = "Blend Layer 2 Spec";
+	  //string UIWidget = "slider";
+	  //float UIMin = 0.02;
+	  //float UIMax = 0.05;
+	  //float UIStep = 0.001;
+	> = 0.04;
+
+	//TODO: Hide From User since his should ALWAYS be 1?
+	float BlendMaskTiling
+	<
+	  register = REG_PM_PARAM_6.x;
+	  string UIHelp = "This should most likley ALWAYS be 1";
+	  string UIName = "Blend Mask Tiling";
+	  string UIWidget = "slider";
+	  float UIMin = 0.05;
+	  float UIMax = 20.0;
+	  float UIStep = 0.05;
+	> = 1.0;
+
+		float TilingScale2
+	<
+	  register = REG_PM_PARAM_9.y;
+	  string UIHelp = "Change tiling";
+	  string UIName = "Layer 2 Tiling";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 200.0;
+	  float UIStep = 1.0;
+	> = 1.0;
+
+	float TilingScale3
+	<
+	  register = REG_PM_PARAM_9.z;
+	  string UIHelp = "Change tiling";
+	  string UIName = "Layer 3 Tiling";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 200.0;
+	  float UIStep = 1.0;
+	> = 1.0;
+
+	float TilingScale4
+	<
+	  register = REG_PM_PARAM_9.w;
+	  string UIHelp = "Change tiling";
+	  string UIName = "Layer 4 Tiling";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 200.0;
+	  float UIStep = 1.0;
+	> = 1.0;
+
+	float4 DiffuseTint2
+	<
+	  register = REG_PM_PARAM_11;
+	  string UIHelp = "change color";                   
+	  string UIName = "Layer 2 Color (Tint)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+
+	float4 DiffuseTint3
+	<
+	  register = REG_PM_PARAM_12;
+	  string UIHelp = "change color";                   
+	  string UIName = "Layer 3 Color (Tint)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+
+	float4 DiffuseTint4
+	<
+	  register = REG_PM_PARAM_14;
+	  string UIHelp = "change color";                   
+	  string UIName = "Layer 4 Color (Tint)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+
+	float GlossMult2
+	<
+	  register = REG_PM_PARAM_15.y;
+	  string UIHelp = "Gloss multiplier of Layer 2";
+	  string UIName = "Layer 2 Gloss";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.005;
+	> = 1.0;
+
+	float GlossMult3
+	<
+	  register = REG_PM_PARAM_15.z;
+	  string UIHelp = "Gloss multiplier of Layer 3";
+	  string UIName = "Layer 3 Gloss";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.005;
+	> = 1.0;
+
+	float GlossMult4
+	<
+	  register = REG_PM_PARAM_15.w;
+	  string UIHelp = "Gloss multiplier of Layer 4";
+	  string UIName = "Layer 4 Gloss";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.005;
+	> = 1.0;
+
+	//Specular
+	float4 Spec2
+	<
+	  register = REG_PM_PARAM_21;
+	  string UIHelp = "Change Specular of Layer 2";                   
+	  string UIName = "Layer 2 Color (Specular)";    
+	  string UIWidget = "color";
+	> = {0.0, 0.0, 0.0, 0.0};
+
+	float4 Spec3
+	<
+	  register = REG_PM_PARAM_22;
+	  string UIHelp = "Change Specular of Layer 3";                   
+	  string UIName = "Layer 3 Color (Specular)";    
+	  string UIWidget = "color";
+	> = {0.0, 0.0, 0.0, 0.0};
+
+	float4 Spec4
+	<
+	  register = REG_PM_PARAM_23;
+	  string UIHelp = "cChange Specular of Layer 4";                   
+	  string UIName = "Layer 4 Color (Specular)";    
+	  string UIWidget = "color";
+	> = {0.0, 0.0, 0.0, 0.0};
+
+	//Shininess
+	float Smooth2
+	<
+	  register = REG_PM_PARAM_24.y;
+	  string UIHelp = "Smoothness multiplier for Layer 2";
+	  string UIName = "Layer 2 Smoothness";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.1;
+	> = 1.0;
+
+	float Smooth3
+	<
+	  register = REG_PM_PARAM_24.z;
+	  string UIHelp = "Smoothness multiplier for Layer 3";
+	  string UIName = "Layer 3 Smoothness";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.1;
+	> = 1.0;
+
+	float Smooth4
+	<
+	  register = REG_PM_PARAM_24.w;
+	  string UIHelp = "Smoothness multiplier for Layer 4";
+	  string UIName = "Layer 4 Smoothness";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.1;
+	> = 1.0;
+
+	//Diff is Used from the Material that LB calls on
+	float4 Diff2
+	<
+	  register = REG_PM_PARAM_26;
+	  string UIHelp = "Diffuse for the Layer 2 Texture";                   
+	  string UIName = "Layer 2 Color (Diffuse)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+
+	float4 Diff3
+	<
+	  register = REG_PM_PARAM_27;
+	  string UIHelp = "Diffuse for the Layer 3 Texture";                   
+	  string UIName = "Layer 3 Color (Diffuse)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+
+	float4 Diff4
+	<
+	  register = REG_PM_PARAM_28;
+	  string UIHelp = "Diffuse for the Layer 4 Texture";                   
+	  string UIName = "Layer 4 Color (Diffuse)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+#endif
+
+//This triggers layer 1 options
+#if %HIGHRES_LAYERS
+	
+	float BlendFactorBump
+	<
+	  register = REG_PM_PARAM_8.x;
+	  string UIHelp = "Changes intensity of the Layered NormalMaps";
+	  string UIName = "Global Bumpmap Strength";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.001;
+	> = 0.5;
+
+	float TilingScale1
+	<
+	  register = REG_PM_PARAM_9.x;
+	  string UIHelp = "Change tiling";
+	  string UIName = "Layer 1 Tiling";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 200.0;
+	  float UIStep = 1.0;
+	> = 1.0;
+
+	float4 DiffuseTint1
+	<
+	  register = REG_PM_PARAM_10;
+	  string UIHelp = "change color";                   
+	  string UIName = "Layer 1 Color (Tint)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};
+
+	float GlossMult1
+	<
+	  register = REG_PM_PARAM_15.x;
+	  string UIHelp = "Gloss multiplier of Layer 1";
+	  string UIName = "Layer 1 Gloss";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.005;
+	> = 1.0;
+
+	//Specular
+	float4 Spec1
+	<
+	  register = REG_PM_PARAM_20;
+	  string UIHelp = "Change Specular of Layer 1";                   
+	  string UIName = "Layer 1 Color (Specular)";    
+	  string UIWidget = "color";
+	> = {0.0, 0.0, 0.0, 0.0};
+
+	//Shininess
+	float Smooth1
+	<
+	  register = REG_PM_PARAM_24.x;
+	  string UIHelp = "Smoothness multiplier for Layer 1";
+	  string UIName = "Layer 1 Smoothness";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0;
+	  float UIMax = 1.0;
+	  float UIStep = 0.1;
+	> = 1.0;
+
+	//Diff is Used from the Material that LB calls on
+	float4 Diff1
+	<
+	  register = REG_PM_PARAM_25;
+	  string UIHelp = "Diffuse for the Layer 1 Texture";                   
+	  string UIName = "Layer 1 Color (Diffuse)";    
+	  string UIWidget = "color";
+	> = {1.0, 1.0, 1.0, 1.0};	
+#endif
+
+
+#if %DECAL && !%DIRTLAYER  // Reusing DIRTLAYER registers
+	float DecalFalloff
+	<
+	  register = REG_PM_PARAM_6.z;
+	  string UIHelp = "Pow applied to decal alpha";
+	  string UIName = "Decal Alpha Falloff";
+	  string UIWidget = "slider";
+	  float UIMin = 0.0001;
+	  float UIMax = 128.0;
+	  float UIStep = 1;
+	> = 1;
+
+	float DecalAlphaMult
+	<
+	  register = REG_PM_PARAM_6.w;
+	  string UIHelp = "Multiplier applied to decal alpha";
+	  string UIName = "Decal Alpha Multiplier";
+	  string UIWidget = "slider";
+	  float UIMin = 0;
+	  float UIMax = 10;
+	  float UIStep = 0.01;
+	> = 1;
+
+	float DecalAngleBasedFading
+	<
+		register = REG_PM_PARAM_7.x;
+		string UIHelp = "Controls fading of decal based on surface normal";
+		string UIName = "Decal Angle Based Fading";
+		string UIWidget = "slider";
+		float UIMin = 0;
+		float UIMax = 10;
+		float UIStep = 0.01;
+	> = 1;
+
+	float DecalDiffuseOpacity
+	<
+	  register = REG_PM_PARAM_7.y;
+	  string UIHelp = "Opacity multiplier for fading out decal diffuse color";
+	  string UIName = "Decal Diffuse Opacity";
+	  string UIWidget = "slider";
+	  float UIMin = 0;
+	  float UIMax = 1;
+	  float UIStep = 0.01;
+	> = 1;
+
+
+	float DecalNormalOpacity
+	<
+		register = REG_PM_PARAM_7.z;
+		string UIHelp = "Opacity multiplier for fading out decal normals";
+		string UIName = "Decal Normal Opacity";
+		string UIWidget = "slider";
+		float UIMin = 0;
+		float UIMax = 1;
+		float UIStep = 0.01;
+	> = 1;
+
+	float DecalSpecularOpacity
+	<
+		register = REG_PM_PARAM_7.w;
+		string UIHelp = "Opacity multiplier for fading out decal specular reflectance and gloss";
+		string UIName = "Decal Spec/Gloss Opacity";
+		string UIWidget = "slider";
+		float UIMin = 0;
+		float UIMax = 1;
+		float UIStep = 0.01;
+	> = 1;
+#endif
+
+//=========================================================================
+
+#include "VertexLib.cfi"
+
+///////////////////////////////
+// Samplers
+
+Texture2D dirtTex : register(t9)
+<
+  UIName = "Dirt Map";
+  UIDescription = "Dirt Map";
+> = TM_Custom;
+
+///////////////// vertex shader //////////////////
+
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+vert2GeomGeneral IlluminationVS(app2vertGeneral IN)
+#else
+vert2FragGeneral IlluminationVS(app2vertGeneral IN)
+#endif
+{
+  vert2FragGeneral OUT = (vert2FragGeneral)0; 
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+  vert2GeomGeneral OUT_ext = (vert2GeomGeneral)0; 
+#endif
+
+  streamPos vertPassPos = (streamPos)0;
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+  vs_shared_output(IN, OUT, OUT_ext, vertPassPos, true);
+#else
+  vs_shared_output(IN, OUT, vertPassPos, true);
+#endif
+	
+#if %DECAL && !%_TT_TEXCOORD_PROJ
+	OUT.baseTC.zw = IN.vertCommon.baseTC.xy;
+#endif
+
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+  OUT_ext.IN = OUT;
+  return OUT_ext;
+#else
+  return OUT;
+#endif
+}
+
+///////////////// geometry shaders //////////////////
+
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+[maxvertexcount(9)]
+void IlluminationGS(triangle vert2GeomGeneral In[3], inout TriangleStream<geom2FragGeneral> OutStream)
+{
+	EmitPrismG(In[0], In[1], In[2], OutStream);
+}
+#endif
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void GatherMaterialAttribs(in half3x3 mTangentToWS, in float2 baseTC, in half4 vertexColor, out MaterialAttribsCommon attribs)
+{
+	// TODO: SilPom: Find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+	
+	attribs = MaterialAttribsDefault();
+	
+  // Base layer
+	half3 vNormalTS = half3(0, 0, 1);
+#if %NORMAL_MAP
+	vNormalTS = GetNormalMap(normalsTex, baseTC.xy);
+#endif
+	attribs.Smoothness = MatSpecColor.w * GetSmoothnessTex(smoothnessTex, baseTC.xy);
+	
+	attribs.Albedo = MatDifColor.rgb;
+	#if !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		attribs.Albedo *= GetDiffuseTex(diffuseTex, baseTC.xy).rgb;
+	#else
+		attribs.Albedo *= GetDiffuseTex(diffuseTex, float4(baseTC.xy, 0, 0));
+	#endif
+	
+	attribs.Reflectance = MatSpecColor.rgb;
+#if %SPECULAR_MAP
+	#if !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		attribs.Reflectance *= GetSpecularTex(specularTex, baseTC.xy).rgb;
+	#else
+		attribs.Reflectance *= GetSpecularTexLod(specularTex, float4(baseTC.xy, 0, 0));
+	#endif
+#endif
+
+	// Decals
+#if %DECAL && %_RT_DECAL_TEXGEN_2D
+	#if %_TT_TEXCOORD_PROJ
+		attribs.Albedo = GetDiffuseDecalTex(diffuseTex, baseTC.xy / baseTC.w).rgb;
+	#else
+		attribs.Albedo = GetDiffuseDecalTex(diffuseTex, baseTC.xy).rgb;
+	#endif 
+#endif
+
+	// Blend layer
+#if %BLENDLAYER
+	// half blendFac = GetLayerBlendingValue(emittanceTex, baseTC.xy * BlendMaskTiling, 0, vertexColor.w, BlendFactor, BlendFalloff);
+	
+	// #if !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		// half4 diffuseMap2 = GetDiffuse2Tex(Diffuse2Tex, baseTC.xy * BlendLayer2Tiling);
+	// #else
+		// half4 diffuseMap2 = GetDiffuse2TexLod(Diffuse2Tex, float4(baseTC.xy * BlendLayer2Tiling, 0, 0)); // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+	// #endif
+	// attribs.Albedo = lerp(attribs.Albedo, diffuseMap2, blendFac);
+	
+	// #if !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		// //half glossLayer2 = GetSmoothness2Tex(smoothness2Tex, baseTC.xy * BlendLayer2Tiling);
+	// #else
+		// //half glossLayer2 = GetSmoothness2TexLod(smoothness2Tex, float4(baseTC.xy * BlendLayer2Tiling, 0, 0)); // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+	// #endif
+	// //attribs.Smoothness = lerp(attribs.Smoothness, glossLayer2, blendFac);
+	
+	// attribs.Reflectance = lerp(attribs.Reflectance, BlendLayer2Specular, blendFac);
+	
+	// half3 vNormal2 = GetNormalMap(Bump2Tex, baseTC.xy * BlendLayer2Tiling);
+	// #if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		// const float3 norm = vNormalTS;
+		// const float3 binorm = cross(float3(1, 0, 0), norm);
+		// const float3 tang = cross(norm, binorm);
+		// const float3x3 matLocal = float3x3(tang, -binorm, norm);
+		// vNormal2 = mul(vNormal2, matLocal);
+	// #endif
+	// vNormalTS = lerp(vNormalTS, vNormal2, blendFac);
+#endif
+
+#if %DIRTLAYER
+  // half4 dirtMap = GetCustomTex(dirtTex, baseTC.xy * half2(DirtTiling, DirtTiling));
+  // half dirtBlendFac = DirtStrength * lerp(1.0h, dirtMap.a, DirtMapAlphaInfluence) * (1 - vertexColor.a);
+  // attribs.Albedo = lerp(attribs.Albedo, dirtMap * DirtTint, dirtBlendFac);
+  // attribs.Reflectance = lerp(attribs.Reflectance, attribs.Reflectance * DirtGlossFactor, dirtBlendFac);
+#endif
+
+#if %VERTCOLORS
+	attribs.Albedo *= vertexColor.rgb;
+#endif
+
+	// Detail mapping
+#if %DETAIL_MAPPING
+	//half3 detailScales = half3(DetailBumpScale, DetailDiffuseScale, DetailGlossScale);
+	//half4 detailMap = GetDetailTex(detailTex, baseTC.xy * CM_DetailTilingAndAlphaRef.xy) * detailScales.xxyz;
+#if %ALPHAMASK_DETAILMAP
+	//detailMap *= GetAlphaTex(diffuseTex, baseTC.xy);
+#endif
+
+	//vNormalTS.xy += detailMap.xy;
+	//attribs.Smoothness += attribs.Smoothness * detailMap.w;
+	//attribs.Albedo += attribs.Albedo * detailMap.z;
+#endif
+
+	// Compute world space normal
+	attribs.NormalWorld = normalize(mTangentToWS[2] + 1e-6);
+#if %NORMAL_MAP || %WRINKLE_BLENDING || %DETAIL_MAPPING
+	attribs.NormalWorld = normalize(mul(vNormalTS, mTangentToWS));
+#endif
+}
+
+float GatherAlpha(float4 baseTC, half vertexAlpha)
+{
+	half alpha = MatDifColor.w;
+#if !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+	alpha *= GetDiffuseTex(diffuseTex, baseTC.xy).w;
+#else
+	alpha *= GetDiffuseTex(diffuseTex, float4(baseTC.xy, 0, 0)).w;
+#endif
+
+#if %VERTCOLORS
+	alpha *= vertexAlpha;
+#endif
+
+#if %DECAL
+	#if !%_TT_TEXCOORD_PROJ
+		alpha *= GetOpacityTex(DecalOpacityTex, baseTC.zw).r;
+	#else
+		alpha *= GetOpacityTex(DecalOpacityTex, baseTC.xy).r;
+	#endif
+	#if !%DIRTLAYER
+		alpha = saturate(pow(alpha * DecalAlphaMult, DecalFalloff));
+	#endif
+#endif
+
+#if %_RT_DECAL_TEXGEN_2D
+  alpha *= 100.0 / 99.0;
+#endif
+
+	return alpha;
+}
+
+half3 GetEmittanceMask(float2 baseTC)
+{
+	half4 emittanceMap = GetEmittanceTex(emittanceTex, baseTC.xy);
+	
+	// Increase the range of non-HDR textures:
+	//   AdjustLuminance(emittanceMap.rgb, pow(GetLuminance(emittanceMap.rgb), Gamma));
+	emittanceMap.rgb *= pow(max(GetLuminance(emittanceMap.rgb), 1e-6), EmittanceMapGamma - 1);
+	
+	// DEPRECATED: Just for backwards compatibility (up to 3.8.3)
+	emittanceMap.rgb *= emittanceMap.a;
+	
+	return emittanceMap.rgb;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void Callback_ShadingDirect(in ForwardShadingAttribs attribs, in ForwardLightParams light, out float3 diffuseAcc, out float3 specularAcc)
+{
+	float3 viewVec = normalize(-attribs.worldPos);
+	float NdotL = saturate(dot(attribs.normal, light.lightVec));
+
+	diffuseAcc.x = DiffuseBRDF(attribs.normal, viewVec, light.lightVec, attribs.smoothness, NdotL);
+	specularAcc = SpecularBRDF(attribs.normal, viewVec, light.lightVec, attribs.smoothness, attribs.reflectance) * NdotL;
+	
+	diffuseAcc = diffuseAcc.x * light.illuminance;
+	specularAcc = specularAcc * light.illuminance;
+}
+
+#include "ForwardShading.cfi"
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+pixout IlluminationPS(geom2FragGeneral IN_ext)
+#else
+pixout IlluminationPS(vert2FragGeneral IN)
+#endif
+{
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+	vert2FragGeneral IN = IN_ext.IN;
+#endif
+
+	pixout OUT = (pixout)0;
+
+	half3 emittance = MatEmissiveColor.xyz * MatEmissiveColor.w * (1000.0 / 10000.0);
+	const bool bEmissive = GetLuminance(emittance.xyz) > 0;
+	if (bEmissive)
+	{
+		emittance *= GetEmittanceMask(IN.baseTC);
+	}
+
+#if !%_RT_SECONDARY_VIEW  // Do additive glow pass just when deferred shading is on
+	if (bEmissive && MatDifColor.w == 1)
+	{
+		OUT.Color.rgb = emittance;
+		return OUT;
+	}
+#endif
+
+#if %_RT_ALPHATEST
+	half diffuseMapAlpha = GetAlphaTex(diffuseTex, IN.baseTC.xy);
+	clip(diffuseMapAlpha - Get_MaterialAlphaTest());
+#endif
+
+	// Gather surface material attributes
+	MaterialAttribsCommon commonAttribs;
+
+	half3x3 mTangentToWS = half3x3(IN.vTangent.xyz, IN.vBinormal.xyz, cross(IN.vTangent.xyz, IN.vBinormal.xyz) * IN.vTangent.w);
+
+
+
+	half4 vertexColor = 0;
+#if %VERTCOLORS || %BLENDLAYER || %DIRTLAYER
+	vertexColor = IN.Color;
+#endif
+
+	GatherMaterialAttribs(mTangentToWS, IN.baseTC.xy, vertexColor, commonAttribs);
+
+	ForwardShadingAttribs fwdAttribs;
+	fwdAttribs.screenUV = IN.screenProj.xy / IN.screenProj.w;
+	fwdAttribs.worldPos = IN.vView.xyz;
+
+	float3 diffuseAcc = 0, specularAcc = 0;
+#if %_RT_ALPHABLEND && !%DECAL
+	const bool bSunShadows = false;
+#else
+	const bool bSunShadows = true;
+#endif
+	Fwd_StandardOpaqueShading(commonAttribs, fwdAttribs, diffuseAcc, specularAcc, bSunShadows);
+
+	OUT.Color.rgb = diffuseAcc + specularAcc + emittance;
+	OUT.Color.a = 1;
+
+#if %_RT_ALPHABLEND
+	OUT.Color.a = GatherAlpha(IN.baseTC.xyzw, vertexColor.w);
+#endif
+
+	const float3 worldPos = IN.vView.xyz + GetWorldViewPos();
+	Fwd_ApplyFog(worldPos.xyz, IN.vView.xyz, IN.WPos, OUT.Color.rgb);
+
+	return OUT;
+}
+
+#include "IllumTess.cfi"
+
+//////////////////////////////// technique ////////////////
+
+technique General
+<
+  string Script =
+        "TechniqueZ=ZPass;"
+#if !%DECAL && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING && !ENABLE_TESSELLATION
+				"TechniqueZPrepass=ZPrepass;"
+#endif
+        "TechniqueMotionBlur=MotionBlurPass;"
+        "TechniqueCustomRender=CustomRenderPass;"
+        "TechniqueEffectLayer=EffectLayerPass;"
+        "TechniqueShadowGen=ShadowGen;"
+        "TechniqueDebug=DebugPass;"
+>
+{
+	pass p0
+	{    
+		VertexShader = IlluminationVS() GeneralVS;
+#if ENABLE_TESSELLATION
+		HullShader   = IllumHS() GeneralHS;
+		DomainShader = IllumDS() GeneralDS;
+#endif
+
+// NOTE: SilPOM is automatically turned off via IllumValidations when NVidia multires is enabled
+// TODO: Make SilPOM work with NVidia multires
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING 
+		GeometryShader = IlluminationGS() GeneralGS;
+#else
+		GeometryShader = $AutoGS_MultiRes();
+#endif
+
+		PixelShader = IlluminationPS() GeneralPS;
+
+#if %DECAL
+		ZEnable = true;    
+		ZWriteEnable = false;    
+		ZFunc = LEqual;
+		CullMode = Back;        
+#else
+		ZEnable = true;    
+		ZWriteEnable = true;    
+		CullMode = Back;
+#endif        
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if !%DECAL && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING && !ENABLE_TESSELLATION
+	#include "CommonZPrePass.cfi"
+#endif
+
+#include "LBCommonZPass.cfi"
+#include "CommonMotionBlurPass.cfi"
+#include "CommonViewsPass.cfi"
+#include "CommonEffectLayerPass.cfi"
+#include "ShadowCommon.cfi"
+#include "CommonShadowGenPass.cfi"
+#include "CommonDebugPass.cfi"
+#if PCDX11
+	#include "MeshBaker.cfi"
+#endif

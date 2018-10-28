@@ -1,0 +1,76 @@
+// (C)2012 - 2016 Cloud Imperium Games Corporation & Cloud Imperium Games UK Ltd.
+
+Version (1.00)
+
+UsesCommonGlobalFlags
+
+Property
+{
+  Name = %DECAL_MULTIPLY_BASE_COLOR
+  Mask = 0x4
+  Property    (Decal - Multiply base color)
+  Description (Multiply base material color.)  
+}
+
+Property
+{
+  Name = %HIGHRES_LAYERS
+  Mask = 0x100
+  Property    (High-res Layers)
+  Description (Use high-res layer library)
+}
+
+Property
+{
+  Name = %NORMAL_MAP
+  Mask = 0x200
+  Property    (Shared normal map)
+  Description (Use shared normal map texture)
+  DependencySet = $TEX_Normals
+  DependencyReset = $TEX_Normals
+  Hidden
+}
+
+Property
+{
+  Name = %BLENDLAYER
+  Mask = 0x400
+  Property    (Blend map)
+  Description (Use blend map texture)
+  //DependencySet = $TEX_Opacity
+  //DependencyReset = $TEX_Opacity
+}
+
+Property
+{
+  Name = %DECALS
+  Mask = 0x800
+  Property    (Decals)
+  Description (Use diffuse and parallax occlusion decals via 2nd UV set)
+}
+
+Property
+{
+  Name = %HEIGHT_MAP
+  Mask = 0x1000
+  Property    (Parallax Occlusion Mapping)
+  Description (Parallax Occlusion Mapping)
+}
+
+Property
+{
+  Name = %DETAIL_MAPPING
+  Mask = 0x2000
+  Property    (Texture Wear-Dirt-AO)
+  Description (Texture Wear-Dirt-AO)
+  //DependencySet = $TEX_Diffuse
+  //DependencyReset = $TEX_Diffuse
+}
+
+Property
+{
+  Name = %WEAR_DIRT_AO_VERTEX
+  Mask = 0x4000
+  Property    (Vertex Wear-Dirt-AO)
+  Description (Vertex Wear-Dirt-AO)
+}

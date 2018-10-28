@@ -21,6 +21,17 @@ UsesCommonGlobalFlags
 
 Property
 {
+  Name = %DIFFUSE_MAP
+  Mask = 0x2
+  Property    (Diffuse map)
+  Description (Use diffuse map)
+  DependencySet = $TEX_Diffuse
+  DependencyReset = $TEX_Diffuse
+  Hidden
+}
+
+Property
+{
   Name = %NORMAL_MAP
   Mask = 0x1
   Property    (Normal map)

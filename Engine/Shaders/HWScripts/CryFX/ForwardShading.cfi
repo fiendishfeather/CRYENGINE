@@ -15,7 +15,7 @@ Texture2D               Fwd_ShadowMap1         : register(t27);
 Texture2D               Fwd_ShadowMap2         : register(t28);
 Texture2D               Fwd_ShadowMap3         : register(t29);
 Texture2D               Fwd_CloudShadowMap     : register(t30);
-Texture2D               Fwd_ShadowNoise        : register(t31);
+Texture2D               Fwd_ShadowNoise        : register(t31);//searchmark
 Texture2D               Fwd_SceneDepth         : register(t32);
 Texture2DArray<float4>  Fwd_SunShadowMask      : register(t38);
 Texture3D<float4>       Fwd_volFogTex          : register(t42);

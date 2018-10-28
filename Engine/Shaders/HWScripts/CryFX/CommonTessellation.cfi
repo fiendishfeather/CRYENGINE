@@ -168,7 +168,7 @@ struct HS_CONTROL_POINT_OUTPUT_ZPASS
 	float3 viewTS   : TEXCOORDN;
 #endif
 
-#if %VERTCOLORS || %BLENDLAYER
+#if %VERTCOLORS || %BLENDLAYER || %BLENDLAYERLB
 	float4 Color    : COLOR0;
 #endif
 
@@ -183,7 +183,7 @@ struct HS_CONTROL_POINT_OUTPUT_ILLUM
 	float4 vTangent  : TEXCOORDN;
 	float4 vBinormal : TEXCOORDN;
 	
-#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER
+#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER || %BLENDLAYERLB
 	float4 Color      : COLOR0;
 #endif
 };

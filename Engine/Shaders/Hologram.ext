@@ -14,18 +14,12 @@
 //  History:
 //  TJ Long: Added more flags so we can get information out to match Star Citizens Illum a bit better
 ////////////////////////////////////////////////////////////////////////////
- 
+
+
+
 Version (1.00)
 
 UsesCommonGlobalFlags
-
-Property
-{
-  Name = %DECAL_MULTIPLY_BASE_COLOR
-  Mask = 0x4
-  Property    (Decal - Multiply base color)
-  Description (Multiply base material color.)  
-}
 
 //FIEND TODO: Fix this so it knows if the diffuse slot is in use or not
 Property

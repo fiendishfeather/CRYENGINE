@@ -1,4 +1,5 @@
 // Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Updated by TJ Long (Fiendishfeather) to have light styled inline with Star Citizen
 
 // Shader global descriptions
 float Script : STANDARDSGLOBAL
@@ -32,28 +33,30 @@ technique LightStyles
     KeyFrameParams = {|1|0|}
   }
 
+  //Fiend: Fixed to CIGs
   Style 2
   {
-    Speed = 1;
-    KeyFrameParams = {|1|1|0|0|}
+    Speed = 15;
+    KeyFrameParams = {|1|0.4|1|0.4|1|0.4|0|0|0|0|0|0|0|0|0|0|0|}
   }
-
   Style 3
   {
     Speed = 5;
     KeyFrameParams = {|1|1|1|1|1|1|0|0|0|0|0|0|}
   }
 
+  //Fiend: Fixed to CIGs
   Style 4
   {
-    Speed = 10;
-    KeyFrameParams = {|1.0 0 0|0.9 0.1 0|0.8 0.2 0|0.7 0.3 0|0.6 0.4 0|0.5 0.5 0|0.4 0.6 0|0.3 0.7 0|0.2 0.8 0|0.1 0.9 0|0 1 0|0 0.9 0.1|0 0.8 0.2|0 0.7 0.3|0 0.6 0.4|0 0.5 0.5|0 0.4 0.6|0 0.3 0.7|0 0 0.6|0.5 0 0.5|0.6 0 0.4|0.7 0 0.3|0.8 0 0.2|0.9 0 0.1|1 0 0|}
+    Speed = 60;
+    KeyFrameParams = {|0|0.2|0.6|0.8|1|1|1|0.8|0.6|0.4|0.2|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|}
   }
 
+  //Fiend: Fixed to CIGs
   Style 5
   {
     Speed = 60;
-    KeyFrameParams = {|1|1|0|0|1|1|1|0|0|1|0|0|1|0|1|0|0|0|1|0|1|0|0|1|0|0|1|0|0|0|1|0|0|0|0|0|1|1|1|1|1|1|0|0|1|0|1|0|0|1|0|0|0|0|}
+    KeyFrameParams = {|0|0.2|0.6|0.8|1|1|1|0.8|0.6|0.4|0.2|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|}
   }
 
   Style 6

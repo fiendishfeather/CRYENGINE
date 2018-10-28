@@ -62,9 +62,10 @@ struct vert2FragGeneral
   half4 vNormal    : TEXCOORDN;
 #endif
 
-#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER
-	float4 Color      : COLOR0;
-#endif
+//#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER || %BLENDLAYERLB
+//	float4 Color      : COLOR0;
+//#endif
+float4 Color      : COLOR0;
 
 	MSAA_SAMPLE_INDEX_PS
 };
@@ -100,9 +101,10 @@ struct vert2fragZ
 	half4 vNormalWS   : TEXCOORDN;
 
 
-#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER 
-	half4 Color      : COLOR0;
-#endif
+////#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER || %BLENDLAYERLB
+//	half4 Color      : COLOR0;
+//#endif
+half4 Color      : COLOR0;
 
 #if %TEMP_TERRAIN || (%TEMP_VEGETATION && %_RT_BLEND_WITH_TERRAIN_COLOR)
 	float4 terrainParams0    : TEXCOORDN;
@@ -258,9 +260,10 @@ void vs_shared_output( in app2vertGeneral IN, inout vert2FragGeneral OUT, inout 
   OUT.screenProj = HPosToScreenTC(HPosition);
   OUT.vView.w = vertPassPos.Position.w;
 
-#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER
-  OUT.Color = vertPassPos.Color;
-#endif
+//#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER || %BLENDLAYERLB
+//  OUT.Color = vertPassPos.Color;
+//#endif
+OUT.Color = vertPassPos.Color;
 
 #if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
 {

@@ -20,6 +20,17 @@ Version (1.00)
 
 Property
 {
+  Name = %DIFFUSE_MAP
+  Mask = 0x2
+  Property    (Diffuse map)
+  Description (Use diffuse map)
+  DependencySet = $TEX_Diffuse
+  DependencyReset = $TEX_Diffuse
+  Hidden
+}
+
+Property
+{
   Name = %SSREFL
   Mask = 0x1
   Property    (Realtime Reflection)
@@ -92,6 +103,9 @@ Property
   Mask = 0x80
   Property    (Decal map)
   Description (Use tilling decal map as separate texture)
+  DependencySet = $TEX_Custom
+  DependencyReset = $TEX_Custom
+  Hidden
 }
 
 Property

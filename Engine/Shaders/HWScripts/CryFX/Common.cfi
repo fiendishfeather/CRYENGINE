@@ -157,8 +157,16 @@ half  GetSmoothness2TexLod(Texture2D tex, float4 texTC)                         
 half4 GetDetailTex(Texture2D tex, float2 texTC)                                                     { return GetTexture2D(tex, ssMaterialTrilinear, texTC.xy).garb * 2 - 1; }
 half4 GetDetailTexLod(Texture2D tex, float4 texTC)                                                  { return GetTexture2DLod(tex, ssMaterialTrilinear, texTC.xyzw).garb * 2 - 1; }
 half  GetOpacityTex(Texture2D tex, float2 texTC)                                                    { return GetTexture2D(tex,  ssMaterialTrilinear, texTC.xy); }
+half  GetOpacityGreenTex(Texture2D tex, float2 texTC)                                               { return GetTexture2D(tex,  ssMaterialTrilinear, texTC.xy).g; } //<--moje
+half  GetOpacityRedTex(Texture2D tex, float2 texTC)                                                 { return GetTexture2D(tex,  ssMaterialTrilinear, texTC.xy).r; } //<--moje
+half  GetOpacityBlueTex(Texture2D tex, float2 texTC)                                                { return GetTexture2D(tex,  ssMaterialTrilinear, texTC.xy).b; } //<--moje
+half  GetOpacityAlphaTex(Texture2D tex, float2 texTC)                                               { return GetTexture2D(tex,  ssMaterialTrilinear, texTC.xy).a; } //<--moje
 half  GetOpacityTexLod(Texture2D tex, float4 texTC)                                                 { return GetTexture2DLod(tex,  ssMaterialTrilinear, texTC.xyzw); }
 half4 GetBlendTex(Texture2D tex, float2 texTC)                                                      { return GetOpacityTex(tex, texTC.xy); }
+half4 GetBlendGreenTex(Texture2D tex, float2 texTC)                                                 { return GetOpacityGreenTex(tex, texTC.xy); }//<--moje
+half4 GetBlendRedTex(Texture2D tex, float2 texTC)                                                   { return GetOpacityRedTex(tex, texTC.xy); }//<--moje
+half4 GetBlendBlueTex(Texture2D tex, float2 texTC)                                                  { return GetOpacityBlueTex(tex, texTC.xy); }//<--moje
+half4 GetBlendAlphaTex(Texture2D tex, float2 texTC)                                                 { return GetOpacityAlphaTex(tex, texTC.xy); }//<--moje
 half4 GetBlendTexLod(Texture2D tex, float4 texTC)                                                   { return GetOpacityTexLod(tex, texTC.xyzw); }
 half4 GetDecalTex(Texture2D tex, float2 texTC)                                                      { return GetTexture2D(tex, ssMaterialTrilinearBorder, texTC.xy); }
 half4 GetCustomSecTex(Texture2D tex, float2 texTC)                                                  { return GetTexture2D(tex, ssMaterialAnisoHigh, texTC.xy); }

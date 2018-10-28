@@ -556,6 +556,35 @@ float ParallelOpacityFalloff(float3 vWorldPos, float3 vNormal, float fCapOpacity
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Layer blending
 
+half GetLayerGlossA(in Texture2D glossTex,in float2 uv)
+{
+	half4 blendMap = GetBlendAlphaTex(glossTex, uv);
+	half glossMap =  blendMap.a ;  
+	
+	return glossMap;
+}
+half GetLayerGlossR(in Texture2D glossTex,in float2 uv)
+{ 
+	half4 blendMap = GetBlendRedTex(glossTex, uv);
+	half glossMap =  blendMap.r ; 
+	
+	return glossMap;
+}
+half GetLayerGlossB(in Texture2D glossTex,in float2 uv)
+{ 
+	half4 blendMap = GetBlendBlueTex(glossTex, uv);
+	half glossMap =  blendMap.b ; 
+	
+	return glossMap;
+}
+half GetLayerGlossG(in Texture2D glossTex,in float2 uv)
+{ 
+	half4 blendMap = GetBlendGreenTex(glossTex, uv);
+	half glossMap =  blendMap.g ; 
+	
+	return glossMap;
+}
+
 half GetLayerBlendingValue(in Texture2D blendTex, in float2 uv, in float lod, in half vtxAlpha, in half blendFactor, in half blendFalloff)
 {
 	#if !ENABLE_TESSELLATION && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
@@ -565,7 +594,105 @@ half GetLayerBlendingValue(in Texture2D blendTex, in float2 uv, in float lod, in
 	#endif
 
 	half blendFac = vtxAlpha * blendMap.r * (1 + blendFactor);
+	//half blendFac = 1 * blendMap.r * (1 + blendFactor);
 	blendFac = saturate(pow(blendFac, blendFalloff));
+	return blendFac;
+}
+half GetLayerBlendingValueRed(in Texture2D blendTex, in float2 uv, in float lod,in half vtxAlpha, in half blendFactor, in half blendFalloff)
+{
+	#if !ENABLE_TESSELLATION && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+		half4 blendMap = GetBlendRedTex(blendTex, uv);
+	#else
+		half4 blendMap = GetBlendTexLod(blendTex, float4(uv, 0, lod));
+	#endif
+
+	half blendFac = blendMap.r;
+	//half blendFac = vtxAlpha * blendMap.r * ( blendFactor);
+	//blendFac = saturate(pow(blendFac, blendFalloff));
+	return blendFac;
+}
+
+half GetLayerBlendingValueRedWear(in Texture2D blendTex, in float2 uv, in float lod,in half vtxAlpha, in half blendFactor, in half blendFalloff)
+{
+	#if !ENABLE_TESSELLATION && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+		half4 blendMap = GetBlendRedTex(blendTex, uv);
+	#else
+		half4 blendMap = GetBlendTexLod(blendTex, float4(uv, 0, lod));
+	#endif
+
+	//half blendFac = blendMap.r;
+	half blendFac = vtxAlpha * (0.1 + blendMap.r) * (1 + blendFactor);
+	blendFac = saturate(pow(blendFac, blendFalloff));
+	return blendFac;
+}
+
+half GetLayerBlendingValueGreenDirt(in Texture2D blendTex, in float2 uv, in float lod,in half vtxAlpha,in half blendFactor, in half blendFalloff)
+{
+	#if !ENABLE_TESSELLATION && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+		half4 blendMap = GetBlendGreenTex(blendTex, uv);
+	#else
+		half4 blendMap = GetBlendTexLod(blendTex, float4(uv, 0, lod));
+	#endif
+    
+	//half blendFac = blendMap.g;
+	half blendFac = vtxAlpha * (0.1 + blendMap.g) * (1 + blendFactor);
+	blendFac = saturate(pow(blendFac, blendFalloff));
+	return blendFac;
+}
+
+half GetLayerBlendingValueBlueAO(in Texture2D blendTex, in float2 uv, in float lod,in half vtxAlpha,in half blendFactor, in half blendFalloff)
+{
+	#if !ENABLE_TESSELLATION && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+		half4 blendMap = GetBlendBlueTex(blendTex, uv);
+	#else
+		half4 blendMap = GetBlendTexLod(blendTex, float4(uv, 0, lod));
+	#endif
+
+	//half blendFac = blendMap.b;
+	half blendFac = vtxAlpha * blendMap.b * ( blendFactor);
+	blendFac = saturate(pow(blendFac, blendFalloff));
+	return blendFac;
+}
+
+half GetLayerBlendingValueGreen(in Texture2D blendTex, in float2 uv, in float lod,in half vtxAlpha, in half blendFactor, in half blendFalloff)
+{
+	#if !ENABLE_TESSELLATION && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+		half4 blendMap = GetBlendGreenTex(blendTex, uv);
+	#else
+		half4 blendMap = GetBlendTexLod(blendTex, float4(uv, 0, lod));
+	#endif
+
+	half blendFac = blendMap.g;
+	//half blendFac = vtxAlpha * blendMap.g * ( blendFactor);
+	//blendFac = saturate(pow(blendFac, blendFalloff));
+	return blendFac;
+}
+
+half GetLayerBlendingValueBlue(in Texture2D blendTex, in float2 uv, in float lod, in half vtxAlpha,in half blendFactor, in half blendFalloff)
+{
+	#if !ENABLE_TESSELLATION && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+		half4 blendMap = GetBlendBlueTex(blendTex, uv);
+	#else
+		half4 blendMap = GetBlendTexLod(blendTex, float4(uv, 0, lod));
+	#endif
+
+	half blendFac = blendMap.b;
+	//half blendFac = vtxAlpha * blendMap.b * ( blendFactor);
+	//blendFac = saturate(pow(blendFac, blendFalloff));
+	return blendFac;
+}
+
+half GetLayerBlendingValueAlpha(in Texture2D blendTex, in float2 uv, in float lod, in half vtxAlpha,in half blendFactor, in half blendFalloff)
+{
+	#if !ENABLE_TESSELLATION && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+		half4 blendMap = GetBlendAlphaTex(blendTex, uv);
+	#else
+		half4 blendMap = GetBlendTexLod(blendTex, float4(uv, 0, lod));
+	#endif
+	
+	half blendFac = blendMap.a;
+	//half blendFac = vtxAlpha * blendMap.a * ( blendFactor);
+	//blendFac = saturate(pow(blendFac, blendFalloff));
 	return blendFac;
 }
 

@@ -165,9 +165,9 @@ half GetBlendedHeight(float2 uv, half blendLayerFactor, in float blendLayer2Tili
 #if !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
 		half h = GetHeightTex(heightTex, uv);
 	#if %BLENDLAYER
-		half h2 = GetHeight2Tex(Height2Tex, uv * blendLayer2Tiling);
+		//half h2 = GetHeight2Tex(Height2Tex, uv * blendLayer2Tiling);
 		
-		h += blendLayerFactor * (h2 - h);
+		//h += blendLayerFactor * (h2 - h);
 	#endif
 #else
 	half h = GetHeightTexLod(heightTex, float4(uv, 0, 0)); // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
@@ -175,21 +175,26 @@ half GetBlendedHeight(float2 uv, half blendLayerFactor, in float blendLayer2Tili
 	return h;
 }
 
-void ApplyDirtAndBlendLayer(vert2fragZ IN, half blendFac, inout half3 diffCol, inout half3 specCol)
-{
-#if %DIRTLAYER
-	// Deprecated. Dirt layer mostly used for tinting "cars"
-	half4 dirtMap = GetCustomTex(dirtTex, IN.baseTC.xy * half2(DirtTiling, DirtTiling));
-	half dirtBlendFac = DirtStrength * lerp(1.0h, dirtMap.a, DirtMapAlphaInfluence) * (1.0h - IN.Color.a);
-	diffCol = lerp(diffCol, dirtMap * DirtTint, dirtBlendFac);
-	specCol = lerp(specCol, specCol * DirtGlossFactor, dirtBlendFac);
-#elif %BLENDLAYER
-	// Deprecated. Should be unified and behave like a regular material post C3.
-	half4 diffuseMap2 = GetCustomTex(Diffuse2Tex, IN.baseTC.xy * BlendLayer2Tiling);
-	diffCol = lerp( diffCol, diffuseMap2.rgb, blendFac );
-	specCol = lerp( specCol, BlendLayer2Specular, blendFac );
-#endif
-}
+// void ApplyDirtAndBlendLayer(vert2fragZ IN, half blendFac, inout half3 diffCol, inout half3 specCol)
+// {
+// //#if %DIRTLAYER
+	// // // Deprecated. Dirt layer mostly used for tinting "cars"
+	// // half4 dirtMap = GetCustomTex(dirtTex, IN.baseTC.xy * half2(DirtTiling, DirtTiling));
+	// // half dirtBlendFac = DirtStrength * lerp(1.0h, dirtMap.a, DirtMapAlphaInfluence) * (1.0h - IN.Color.a);
+	// // diffCol = lerp(diffCol, dirtMap * DirtTint, dirtBlendFac);
+	// // specCol = lerp(specCol, specCol * DirtGlossFactor, dirtBlendFac);
+// //#elif %BLENDLAYER
+// #if %BLENDLAYER
+	// // Deprecated. Should be unified and behave like a regular material post C3.
+	// half4 diffuseMap2 = GetCustomTex(Diffuse2Tex, IN.baseTC.xy * BlendLayer2Tiling);
+	// half4 height2Map = GetCustomTex(Height2Tex, IN.baseTC.xy * BlendLayer2Tiling);//spec map
+	// diffuseMap2.xyz *= BlendLayer2DiffuseColor.xyz;
+	// height2Map.xyz *= BlendLayer2SpecularColor.xyz;
+	// diffCol = lerp( diffCol, diffuseMap2.rgb, blendFac );
+	// //specCol = lerp( specCol, BlendLayer2Specular, blendFac );
+	// specCol = lerp( specCol, height2Map.rgb, blendFac );
+// #endif
+// }
 
 void ApplyVegetationTerrainColor(vert2fragZ IN, inout MaterialAttribsCommon attribs)
 {
@@ -365,18 +370,32 @@ pixout_gbuffer Common_ZPassPS(vert2fragZ IN)
 		vNormalTS = lerp( vNormalTS, vNormal2, blendFac );
 	#endif
 
+	
 	half4 vDetail = 0;
+	half4 v2Detail = 0;
 	#if %DETAIL_MAPPING
 		half3 vDetailScales = half3(DetailBumpScale, DetailDiffuseScale,DetailGlossScale);
 
 		const float2 tcDetail = IN.baseTC.xy * CM_DetailTilingAndAlphaRef.xy;
 		vDetail = GetDetailTex(detailTex, tcDetail) * vDetailScales.xxyz;
 
+		#if %DETAIL_SECONDARY
+			half3 vDetail2Scales = half3(BlendDetailBumpScale, BlendDetailDiffuseScale, BlendDetailGlossScale);
+			const float2 tc2Detail = IN.baseTC.xy * CM_DetailTilingAndAlphaRef.xy;
+			v2Detail = GetDetailTex(detail2Tex, tc2Detail) * vDetail2Scales.xxyz;
+		#endif
+
+
 		#if %ALPHAMASK_DETAILMAP
 			vDetail *= GetAlphaTex(diffuseTex, IN.baseTC.xy);
 		#endif
 
-		vNormalTS.xy += vDetail.xy;
+		#if %BLENDLAYER && %DETAIL_SECONDARY
+			vNormalTS.xy += lerp(vDetail.xy, v2Detail.xy, blendFac);
+		#else
+			vNormalTS.xy += vDetail.xy;
+		#endif
+
 	#endif
 
 #if %BILLBOARD
@@ -401,22 +420,33 @@ pixout_gbuffer Common_ZPassPS(vert2fragZ IN)
 	half fSmoothness = MatSpecColor.w;
 	fSmoothness *= GetSmoothnessTex(smoothnessTex, IN.baseTC.xy);
 
-  #if %BLENDLAYER
+	#if %BLENDLAYER
 		half layer2Smoothness = GetSmoothness2Tex(smoothness2Tex, IN.baseTC.xy * blendLayer2Tiling);
-		fSmoothness = lerp(fSmoothness, layer2Smoothness, blendFac);
+		//fSmoothness = lerp(fSmoothness, layer2Smoothness, blendFac);
+		fSmoothness = lerp(fSmoothness, layer2Smoothness* (BlendLayer2Glossiness/255), blendFac);
 	#endif
 
 	#if %DETAIL_MAPPING
-		fSmoothness = fSmoothness + fSmoothness * vDetail.w;
+		#if %DETAIL_SECONDARY
+			fSmoothness = fSmoothness + fSmoothness * lerp(vDetail.w, v2Detail.w, blendFac);
+		#else
+			fSmoothness = fSmoothness + fSmoothness * vDetail.w;
+		#endif
 	#endif
 	
+    #if %DECAL && %PARALLAX_OCCLUSION_MAPPING
+	    if (GetSmoothnessTex(smoothnessTex, IN.baseTC.xy) == half(1.0))
+	    {
+            fSmoothness = half3(0.5,0.5,0.5);
+		} 
+	#endif
+	 
 	attribs.Smoothness = fSmoothness;
 	
 	////////////////////////////////////////////////////////////////////////////////////////////////
-  // Output albedo and reflectance
-	
-	half4 diffuseMap = GetDiffuseTex(diffuseTex, IN.baseTC.xy);
-	half3 cAlbedo = diffuseMap.rgb;
+    // Output albedo and reflectance 
+  
+	half3 cAlbedo = GetDiffuseTex(diffuseTex, IN.baseTC.xy).rgb; 
 	half3 cReflectance = MatSpecColor.rgb;
 	
 	#if %DECAL && %_RT_DECAL_TEXGEN_2D
@@ -425,28 +455,55 @@ pixout_gbuffer Common_ZPassPS(vert2fragZ IN)
 		#else
 			cAlbedo = GetDiffuseTex(diffuseTex, IN.baseTC.xy);
 		#endif 
-	#endif
-
+	#endif 
+	
+	#if !%DIFFUSE_MAP
+	    cAlbedo = MatDifColor.rgb;
+	#else
+		cAlbedo *= MatDifColor.rgb;
+	#endif  
+	
 	#if %SPECULAR_MAP
 		cReflectance *= GetSpecularTex(specularTex, IN.baseTC.xy).rgb;
 	#endif
 	
-	ApplyDirtAndBlendLayer(IN, blendFac, cAlbedo, cReflectance);
-
-	#if %VERTCOLORS
-		cAlbedo *= IN.Color.rgb;
+    #if %DECAL && %PARALLAX_OCCLUSION_MAPPING && !%SPECULAR_MAP 
+		//cReflectance = half3(0.541,0.541,0.541);
+		cReflectance = half3(0.25415212,0.25415212,0.25415212);
+	#endif
+	 
+	#if %BLENDLAYER 
+	    //load maps
+        half4 diffuse2Map = GetCustomTex(Diffuse2Tex, IN.baseTC.xy * BlendLayer2Tiling);   
+		half4 specular2Map = GetCustomTex(Height2Tex, IN.baseTC.xy * BlendLayer2Tiling);//spec map
+	    
+		//diffuse  
+		diffuse2Map.xyz *= BlendLayer2DiffuseColor.xyz;
+		cAlbedo = lerp( cAlbedo, diffuse2Map, blendFac );  
+		
+		//specular  
+		specular2Map.xyz *= BlendLayer2SpecularColor.xyz;  
+		cReflectance = lerp( cReflectance, specular2Map, blendFac );
 	#endif
 
-	cAlbedo *= MatDifColor.rgb; 
+	#if %VERTCOLORS && !%DECAL	
+		//cAlbedo *= IN.Color.rgb;
+	#endif
 
-#if %DETAIL_MAPPING
-	cAlbedo = cAlbedo + cAlbedo * vDetail.z;
-#endif
+	#if %DETAIL_MAPPING
+		#if %DETAIL_SECONDARY && %BLENDLAYER
+			cAlbedo = cAlbedo + cAlbedo * lerp(vDetail.z, v2Detail.z, blendFac);
+		#else
+			cAlbedo = cAlbedo + cAlbedo * vDetail.z;
+		#endif
+	#endif
 
-#if %DECAL	
-	cReflectance.xyz = GetLuminance(cReflectance.xyz);
-#endif
-	
+
+
+	#if %DECAL	
+		cReflectance.xyz = GetLuminance(cReflectance.xyz);
+	#endif 
+	//cAlbedo = IN.Color.aaa; 
 	attribs.Albedo = cAlbedo;
 	attribs.Reflectance = cReflectance;
 	
@@ -472,6 +529,14 @@ pixout_gbuffer Common_ZPassPS(vert2fragZ IN)
 	
 	attribs.LightingModel = LIGHTINGMODEL_TRANSMITTANCE;
 	attribs.Transmittance = saturate(fTranslucency) * TransmittanceColor.rgb;
+#else
+	// #if %PARALLAX_OCCLUSION_MAPPING && %DECAL
+    // half fTranslucency = DecalDiffuseOpacity; 
+		// fTranslucency *= GetAlphaTex(diffuseTex, IN.baseTC.xy); 
+	
+	// attribs.LightingModel = LIGHTINGMODEL_TRANSMITTANCE;
+	// attribs.Transmittance = saturate(fTranslucency) * cAlbedo.rgb; 
+    // #endif
 #endif
 
 	////////////////////////////////////////////////////////////////////////////////////////////////
@@ -557,10 +622,12 @@ pixout_gbuffer Common_ZPassPS(vert2fragZ IN)
   ////////////////////////////////////////////////////////////////////////////////////////////////
   // Alpha
 
-  #if %_RT_ALPHABLEND      
-    half fAlpha;
+  #if %_RT_ALPHABLEND       
+    half fAlpha; 
+	half fullOnes=1;
 		
-		fAlpha = GetAlphaTex(diffuseTex, IN.baseTC.xy) * MatDifColor.a;
+		fAlpha = GetAlphaTex(diffuseTex, IN.baseTC.xy) * MatDifColor.a; 
+		
 		#if %VERTCOLORS
 			fAlpha *= IN.Color.a;
 		#endif
@@ -570,29 +637,35 @@ pixout_gbuffer Common_ZPassPS(vert2fragZ IN)
 			#else
 				fAlpha *= GetOpacityTex(DecalOpacityTex, IN.baseTC.xy);
 			#endif
-			#if !%DIRTLAYER
+			#if !%DIRTLAYER //&& !%PARALLAX_OCCLUSION_MAPPING
 				fAlpha = saturate(pow(fAlpha * DecalAlphaMult, DecalFalloff));
 			#endif
 		#endif
 		
-		fAlpha = saturate( fAlpha );
+		#if %PARALLAX_OCCLUSION_MAPPING && %DECAL
+		   // half maskNew  = half(1.0) - GetCustomTex(diffuseTex, IN.baseTC.xy).r;
+		    //fAlpha = fAlpha * maskNew;    
+		#endif
+		
+		//fAlpha = saturate( fAlpha );
 		half fAlphaDiffuse = fAlpha;
 		half fAlphaNormal = fAlpha;
 		half fAlphaSpecular = fAlpha;
 
 		#if %DECAL && !%DIRTLAYER
 			fAlphaDiffuse *= DecalDiffuseOpacity;
-			fAlphaNormal *= DecalNormalOpacity;
-			fAlphaSpecular *= DecalSpecularOpacity;
+			//fAlphaNormal *= DecalNormalOpacity;
+			//fAlphaSpecular *= DecalSpecularOpacity;
 		#endif
 		
 		#if %_RT_SAMPLE0
 			OUT.GBufferA.w = fAlpha;
 		#else
+			//normals, diffuse, specular
 			SetGBufferBlending( OUT.GBufferA, OUT.GBufferB, OUT.GBufferC, fAlphaNormal, fAlphaDiffuse, fAlphaSpecular);
+			//SetGBufferBlending( OUT.GBufferA, OUT.GBufferB, OUT.GBufferC, fAlphaNormal, fAlphaDiffuse, fAlphaSpecular);
 		#endif
   #endif
-
 	return OUT;
 }
 

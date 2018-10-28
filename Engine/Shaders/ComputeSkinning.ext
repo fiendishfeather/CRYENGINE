@@ -15,6 +15,17 @@
 
 Property
 {
+  Name = %DIFFUSE_MAP
+  Mask = 0x2
+  Property    (Diffuse map)
+  Description (Use diffuse map)
+  DependencySet = $TEX_Diffuse
+  DependencyReset = $TEX_Diffuse
+  Hidden
+}
+
+Property
+{
   Name = %COMPUTE_SKINNING_WITH_MORPHS
   Mask = 0x04
   Property    (Apply Morph Targets)

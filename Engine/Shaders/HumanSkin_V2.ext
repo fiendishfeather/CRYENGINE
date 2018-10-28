@@ -66,6 +66,16 @@ Property
 
 Property
 {
+  Name = %WRINKLE_BLENDING_2
+  Mask = 0x400
+  Property    (Wrinkle blending 2 )
+  Description (Use wrinkle map blending for diff/spec)
+  DependencySet = $TEX_Custom
+  DependencyReset = $TEX_Custom
+}
+
+Property
+{
   Name = %TEMP_SKIN
   Mask = 0x1000
   DependencySet = $UserEnabled
@@ -123,3 +133,19 @@ Property
   Description (Use rough approximation of smooth surface subdivision)
 }
 #endif
+
+Property
+{
+  Name = %VERTCOLORS_DEBUG
+  Mask = 0x4
+  Property    (Vertex Colors Debug)
+  Description (Draw vertex colors)
+}
+
+Property
+{
+  Name = %VERTCOLORS_DEBUG_ALPHA
+  Mask = 0x8
+  Property    (Vertex Colors Debug - Alpha)
+  Description (Draw vertex colors)
+}

@@ -1,0 +1,653 @@
+// Copyright 2001-2018 Crytek GmbH. All rights reserved.
+// Heavily modified Illum Shader to work with RGBA masking layers for high-res textures
+// Last Updated: 17MAY2018 by TJ Long: Major refactor that allows Wear/Tear to work
+
+// Todo for refactor phases:
+//  - Rename to GBufferPass
+//	- All shared functionality should be extrated into outside functions, reuse on regular passes
+//	- eg: Decal, Detail Mapping, BlendLayer, etc
+
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+vert2geomZ Common_ZPassVS(app2vertGBuffer IN_common)
+#else
+vert2fragZ Common_ZPassVS(app2vertGBuffer IN_common)
+#endif
+{
+	vert2fragZ OUT = (vert2fragZ)0;
+
+	app2vertGBuffer IN = IN_common;
+
+	streamPos vertPassPos = (streamPos)0;
+	streamPos_FromGBuffer(IN, vertPassPos);
+	streamPos vertPassPosPrev = (streamPos) vertPassPos;
+
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		const float3 SilPomDispl = SilPomDisplacement * TangNormal(IN.vertCommon.Tangent, IN.vertCommon.Binormal);
+		vertPassPos.Position.xyz += SilPomDispl * -HeightBias;
+	#endif
+
+	  float4 HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos);
+
+	#if %_RT_MOTION_BLUR && !%_RT_ALPHABLEND
+		vertPassPosPrev.PositionCurr = vertPassPos.Position;
+		OUT.HPosPrev.xyz = HPosToScreenTC( Pos_Prev_VS_General(g_VS_ViewProjZeroMatr, vertPassPosPrev) ).xyw;
+	#endif
+
+		float3 vPos = vertPassPos.WorldPos.xyz;
+
+	#if ENABLE_TESSELLATION && !%_RT_NO_TESSELLATION
+		//relative position
+		OUT.vView.xyz = vPos.xyz;
+		OUT.vNormal.xyz = normalize(mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.Normal.xyz));
+	#else
+		OUT.HPosition = HPosition;
+	#endif
+
+	#if !%_RT_OBJ_IDENTITY
+	  vPos += g_VS_WorldViewPos.xyz;
+	#endif
+	
+	float3 worldTangentS = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]);
+	float3 worldTangentT = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]);
+	float3 worldTangentN = mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[2]);
+
+	float4 baseTC = vertPassPos.baseTC;  
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output uv coordinates
+
+	#if %_RT_DECAL_TEXGEN_2D 
+		float3 DistAtten;
+		_TCModifyDecal( vertPassPos, baseTC, DistAtten );
+	#endif 
+	
+	_TCModify(baseTC, OUT.baseTC, vertPassPos.Position, vertPassPos.ObjToTangentSpace[2], TS_DIFFUSE);
+
+	#if %DECAL && !%_TT_TEXCOORD_PROJ
+		OUT.baseTC.zw = baseTC.xy;
+	#endif
+
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		OUT.baseTC.xy *= CM_SilPomDetailParams.xy;
+	#endif
+
+	float fAlphaTest = 0.0f;
+	#if %_RT_ALPHATEST	
+
+		fAlphaTest = Get_MaterialAlphaTest();
+		OUT.vNormalWS.w = fAlphaTest;
+
+	#endif
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output tangents
+
+	OUT.vNormalWS = float4(worldTangentN.xyz, fAlphaTest);
+
+	OUT.vTangent = float4(worldTangentS, vertPassPos.Tangent.w); 
+	OUT.vBinormal.xyz = worldTangentT;
+
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output color
+	
+	#if %VERTCOLORS || %BLENDLAYER || %DIRTLAYER
+		OUT.Color = vertPassPos.Color;
+	#endif
+
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output blend with terrain color params
+
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING || %PARALLAX_OCCLUSION_MAPPING || %OFFSET_BUMP_MAPPING || %_RT_ALPHABLEND || %TEMP_EYES || %LEAVES || %GRASS
+	  OUT.viewTS = vPos.xyz - g_VS_WorldViewPos.xyz;
+	#endif
+
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		vert2geomZ OUT_ext = (vert2geomZ) 0;
+		OUT_ext.IN = OUT;
+
+		{
+			streamPos vertPassPosTmp = vertPassPos;
+			vertPassPosTmp.Position.xyz += SilPomDispl;
+
+			const float3 vPosExtr = mul(vertPassPosTmp.InstMatrix, vertPassPosTmp.Position).xyz;
+
+			OUT_ext.viewExtr = mul(float3x3(worldTangentS, worldTangentT, worldTangentN), vPosExtr.xyz);
+			OUT_ext.hPosExtr = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPosTmp);
+
+			OUT_ext.wsDirPos = vPos - g_VS_WorldViewPos.xyz;
+			OUT_ext.wsDirPosExtr = vPosExtr;
+		}
+
+		return OUT_ext;
+	#else
+		return OUT;
+	#endif
+}
+
+///////////////// geometry shaders //////////////////
+
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+	[maxvertexcount(9)]
+	void Common_ZPassGS(triangle vert2geomZ In[3], inout TriangleStream<geom2fragZ> OutStream)
+	{
+		EmitPrismZ(In[0], In[1], In[2], OutStream);
+	}
+#endif
+
+///////////////// pixel shaders //////////////////
+
+half GetBlendedHeight(float2 uv, half blendLayerFactor, in float blendLayer2Tiling)
+{
+#if !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+	#if !%BLENDLAYER
+		half h = GetHeightTex(heightTex, uv);
+	#endif
+	#if %BLENDLAYER
+		half h = GetHeightTex(normalsTex, uv);
+	#endif
+#else
+	half h = GetHeightTexLod(heightTex, float4(uv, 0, 0)); // TODO: find way to compute lod without gradients as they cause pixel artifacts at fin / shell transition
+#endif
+	return h;
+}
+
+//FIEND: This may be able to go since its an empty function
+//void ApplyDirtAndBlendLayer(vert2fragZ IN, half blendFac, inout half3 diffCol, inout half3 specCol)
+//{ }
+
+half flatToOne(in half input)
+{
+	half output;
+	if(input>0.0f)
+	{
+		output = 1.0f;
+	}
+	else
+	{
+		output=0.0f;
+	}
+	return output;
+}
+
+half cutToOne(in half input)
+{
+	half output=input;
+	if(input>1.0f)
+	{
+		output = 1.0f;
+	} 
+	return output;
+}
+
+half merge(in half input1,in half input2)
+{
+	half output;
+	output=input1+input2;
+	if(input1!=0.0f)
+	{
+		if(input2!=0.0f)
+		{
+			output=1.0f;
+		}
+	} 
+	cutToOne(output);
+	return output;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+	pixout_gbuffer Common_ZPassPS(geom2fragZ IN_ext)
+#else
+	pixout_gbuffer Common_ZPassPS(vert2fragZ IN)
+#endif
+{
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+	  vert2fragZ IN = IN_ext.IN;
+	#endif
+	pixout_gbuffer OUT = (pixout_gbuffer) 0;
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Setup tangent to world basis
+
+	half fFlipNormal = 1.0f;
+	#if !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		fFlipNormal *= IN.bIsFrontFace? 1.0f : -1.0f;// Support for double sided lighting, invert face sign if front facing
+	#endif
+
+	half3x3 mTangentToWS = half3x3(half3(1,0,0),half3(0,1,0),half3(0,0,1));
+	#if !%GRASS
+		mTangentToWS = half3x3( IN.vTangent.xyz, IN.vBinormal.xyz, IN.vNormalWS.xyz * fFlipNormal);  
+	#endif
+		
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  // Handle POM
+
+	int mdQuality;
+	half mdDisplacement;
+	half mdHeightBias;
+	half mdSelfShadowStrength;
+	GetMicroDetailParams(mdQuality, mdDisplacement, mdHeightBias, mdSelfShadowStrength);
+
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING || %PARALLAX_OCCLUSION_MAPPING
+		float2 normalTexRes;
+		normalsTex.GetDimensions(normalTexRes.x, normalTexRes.y);
+		const float3 pomAdjustRayForNonSquareTexres = float3(rcp(normalTexRes.xy) * min(normalTexRes.x, normalTexRes.y), 1);
+	#else
+		const float3 pomAdjustRayForNonSquareTexres = 1;
+	#endif
+
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING || %PARALLAX_OCCLUSION_MAPPING || %OFFSET_BUMP_MAPPING || %TEMP_EYES
+		half3 vViewTS = normalize(mul((float3x3)mTangentToWS, IN.viewTS) * pomAdjustRayForNonSquareTexres);
+	#endif
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Gather Blending Maps
+
+	half blendFac = 0;
+	half blendFacG = 0;
+	half blendFacB = 0;
+	half blendFacA = 0;
+	half blendFacW = 0; //wear - otarcia
+	half blendFacD = 0; //dirt - brud
+	half blendFacAO = 0; //Ambient Occlusion
+	float blendLayer2Tiling = 0;
+
+	#if %BLENDLAYER
+		blendLayer2Tiling = BlendLayer2Tiling;
+		if (mdQuality != MICRO_DETAIL_QUALITY_SPM)
+		{
+			blendFac = GetLayerBlendingValueRed(opacityTex, IN.baseTC.xy * BlendMaskTiling, 0, 1, BlendFactor, BlendFalloff);
+			blendFacG = GetLayerBlendingValueGreen(opacityTex, IN.baseTC.xy * BlendMaskTiling, 0, 1, BlendFactor, BlendFalloff);
+			blendFacB = GetLayerBlendingValueBlue(opacityTex, IN.baseTC.xy * BlendMaskTiling, 0, 1, BlendFactor, BlendFalloff);
+			blendFacA = GetLayerBlendingValueAlpha(opacityTex, IN.baseTC.xy * BlendMaskTiling, 0, 1, BlendFactor, BlendFalloff);
+		}
+	#endif
+
+	//FIEND: These don't belong in POM section
+	#if %DETAIL_MAPPING
+		blendFacW = GetLayerBlendingValueRedWear(diffuseTex, IN.baseTC.xy * 1, 0, 1, WearScale, WearBlendFalloff);
+		blendFacD = GetLayerBlendingValueGreenDirt(diffuseTex, IN.baseTC.xy * 1, 0, 1, DirtScale, DirtBlendFalloff);
+		blendFacAO = GetLayerBlendingValueBlueAO(diffuseTex, IN.baseTC.xy * 1, 0, 1, 1, 0.5); // Last ## is the intensity of AO
+	#endif
+
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Alpha testing
+	
+	#if %_RT_ALPHATEST
+		half fDiffuseAlpha = GetAlphaTex(diffuseTex, IN.baseTC.xy);
+		#if (%_RT_MSAA_QUALITY || %_RT_MSAA_QUALITY1) && %_RT_ALPHATEST
+			GetAlphaCoverageMask( diffuseTex, IN.baseTC.xy, IN.vNormalWS.w, fDiffuseAlpha, OUT.uCoverageMask);
+		#endif
+    clip(fDiffuseAlpha - IN.vNormalWS.w);
+	#endif
+	
+	#if %_RT_DISSOLVE
+		float fDissolve = Get_SPI_Dissolve();
+		const int2 vPixQuadIdx= (int2)IN.WPos.xy % 2; // 4 transparency levels for a 2x2 quad. We're using dot/abs instead, since rsx doens't support array indexing. 
+		clip( (fDissolve > 0 ? 1 : -1) * (abs(dot(half4(0.0h, 0.76h, 0.5h,-1.0h), vPixQuadIdx.xxyy))-abs(fDissolve))); // todo: try using coverage mask when in MSAA mode.
+	#endif
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////
+  	// Output normals
+
+  	MaterialAttribsCommon attribs;
+	
+	//Left incase we implement POM/2nd UV Map
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		// const float3 norm = vNormalTS;
+		// const float3 binorm = cross(float3(1, 0, 0), norm);
+		// const float3 tang = cross(norm, binorm);
+		// const float3x3 matLocal = float3x3(tang, -binorm, norm);
+		//vNormal2 = mul(vNormal2, matLocal);
+	#endif
+
+
+	half4 vDetail = 0;
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output Everything
+  
+    half3 vNormalTS = half3(0,0,1);
+	half3 cAlbedo = MatDifColor.rgb;
+	half fSmoothness = MatSpecColor.w;
+	half3 cReflectance = MatSpecColor.rgb;
+
+	half4 diffuseWT;
+	half smoothnessWT;
+	half3 normalMapWT;
+	half blendFacW1;
+	half4 diffuseMap2;
+	half4 smoothnessMap2;
+	half3 normalMap2;
+	half fullOnes = 1;
+	half negative;
+
+	#if %NORMAL_MAP
+		vNormalTS = GetNormalMap(normalsTex, IN.baseTC.xy);
+	#endif
+
+	#if !%BLENDLAYER && !%HIGHRES_LAYERS
+		fSmoothness *= GetSmoothnessTex(smoothnessTex, IN.baseTC.xy);
+	#endif
+
+	#if !%BLENDLAYER && %HIGHRES_LAYERS
+		half4 diffuseMap = GetCustomTex(layer1DiffuseTex, (IN.baseTC.xy * TilingScale1));
+		half3 normalMap = GetNormalMap(layer1NormalsTex, (IN.baseTC.xy * TilingScale1));
+		half4 smoothnesslMap = GetSmoothnessTex(layer1SmoothnessTex, IN.baseTC.xy * TilingScale1);
+		diffuseMap.xyz *= (Diff1.xyz * DiffuseTint1.xyz);
+		cAlbedo = ((diffuseMap.rgb * Diff1.xyz) * DiffuseTint1.xyz);
+		cReflectance = Spec1.xyz  ;
+		vNormalTS = lerp(vNormalTS, normalMap, 0.5 * BlendFactorBump);
+		fSmoothness = smoothnesslMap * Smooth1*GlossMult1;
+
+
+		#if %DETAIL_MAPPING
+		    //blendFacW1 = half(1.0) - blendFacW;
+			blendFacW1 = blendFacW;
+			diffuseWT = GetCustomTex(layer1WTDiffuseTex, IN.baseTC.xy * TilingScaleWear1);
+			normalMapWT = GetNormalMap(layer1WTNormalsTex, IN.baseTC.xy * TilingScaleWear1);
+			smoothnessWT = GetCustomTex(layer1WTSmoothnessTex, IN.baseTC.xy * TilingScaleWear1);
+			cAlbedo = lerp(diffuseWT * WearDiff1.xyz * DiffuseTintWear1.xyz, cAlbedo, blendFacW1);
+			cReflectance = lerp(WearSpec1.xyz, cReflectance, blendFacW1);
+			vNormalTS = lerp(normalMapWT, vNormalTS, blendFacW1);
+			fSmoothness = lerp(smoothnessWT * GlossMultWear1, fSmoothness, blendFacW1);
+
+
+			//Dirt
+			cAlbedo = lerp(DirtColor.xyz, cAlbedo, blendFacD);
+			cReflectance = lerp(0, cReflectance, blendFacD);
+
+			//Ambient Occlusion
+			cAlbedo = lerp(0, cAlbedo, blendFacAO);
+			cReflectance = lerp(0, cReflectance, blendFacAO);
+		#endif
+	#endif
+
+	#if %BLENDLAYER && %HIGHRES_LAYERS
+		//Set Vars
+
+		//Red
+		diffuseMap2 = GetCustomTex(layer1DiffuseTex, IN.baseTC.xy * TilingScale1);
+		normalMap2 = GetNormalMap(layer1NormalsTex, IN.baseTC.xy * TilingScale1);
+		smoothnessMap2 = GetCustomTex(layer1SmoothnessTex, (IN.baseTC.xy * TilingScale1));
+		diffuseMap2.xyz *= (Diff1.xyz*DiffuseTint1.xyz);
+		cAlbedo = diffuseMap2.rgb;
+		cReflectance = Spec1.xyz;
+		vNormalTS = lerp(vNormalTS, normalMap2, blendFac * BlendFactorBump);
+		fSmoothness = smoothnessMap2 * Smooth1 * GlossMult1;
+
+		//Green
+		diffuseMap2 = GetCustomTex(layer2DiffuseTex, IN.baseTC.xy * TilingScale2);
+		normalMap2 = GetNormalMap(layer2NormalsTex, IN.baseTC.xy * TilingScale2);
+		smoothnessMap2 = GetCustomTex(layer2SmoothnessTex, IN.baseTC.xy * TilingScale2);
+		diffuseMap2.xyz *= (Diff2.xyz * DiffuseTint2.xyz);
+		negative = 1 - flatToOne(blendFac);
+		cAlbedo = lerp(cAlbedo, diffuseMap2.rgb, negative);
+		cAlbedo = lerp(cAlbedo, diffuseMap2.rgb, blendFacG);
+		cReflectance = lerp(cReflectance, Spec2.xyz, negative);
+		cReflectance = lerp(cReflectance, Spec2.xyz, blendFacG);
+		vNormalTS = lerp(vNormalTS, normalMap2, blendFacG * BlendFactorBump);
+		fSmoothness = lerp(fSmoothness, smoothnessMap2 * Smooth2 * GlossMult2, negative);
+		fSmoothness = lerp(fSmoothness, smoothnessMap2 * Smooth2 * GlossMult2, blendFacG);
+
+		//Blue
+		diffuseMap2 = GetCustomTex(layer3DiffuseTex, IN.baseTC.xy * TilingScale3);
+		normalMap2 = GetNormalMap(layer3NormalsTex, IN.baseTC.xy * TilingScale3);
+		smoothnessMap2 = GetCustomTex(layer3SmoothnessTex, IN.baseTC.xy * TilingScale3);
+		diffuseMap2.xyz *= (Diff3.xyz * DiffuseTint3.xyz);
+		negative = 1 - flatToOne(blendFac + blendFacG);
+		cAlbedo = lerp(cAlbedo, diffuseMap2.rgb, negative);
+		cAlbedo = lerp(cAlbedo, diffuseMap2.rgb, blendFacB);
+		cReflectance = lerp(cReflectance, Spec3.xyz, negative);
+		cReflectance = lerp(cReflectance, Spec3.xyz, blendFacB);
+		vNormalTS = lerp(vNormalTS, normalMap2, blendFacB * BlendFactorBump);
+		fSmoothness = lerp(fSmoothness, smoothnessMap2 * Smooth3 * GlossMult3, negative);
+		fSmoothness = lerp(fSmoothness, smoothnessMap2 * Smooth3 * GlossMult3, blendFacB);
+
+		//Alpha
+		blendFacA = 1 - saturate(pow(blendFac * 2 + blendFacG * 2 + blendFacB * 2, 2));
+		diffuseMap2 = GetCustomTex(layer4DiffuseTex, IN.baseTC.xy * TilingScale4);
+		normalMap2 = GetNormalMap(layer4NormalsTex, IN.baseTC.xy * TilingScale4);
+		smoothnessMap2 = GetCustomTex(layer4SmoothnessTex, IN.baseTC.xy * TilingScale4);
+		diffuseMap2.xyz *= (Diff4.xyz*DiffuseTint4.xyz);
+		cAlbedo = lerp(cAlbedo, diffuseMap2.rgb, blendFacA);
+		cReflectance = lerp(cReflectance, Spec4.xyz , blendFacA);
+		//vNormalTS = lerp( vNormalTS, normalMap2, (blendFacA - blendFac - blendFacG - blendFacB) * BlendFactorBump);
+		vNormalTS = lerp( vNormalTS, normalMap2, blendFacA * BlendFactorBump);
+		fSmoothness = lerp(fSmoothness, smoothnessMap2 * Smooth4* GlossMult4, blendFacA);
+
+
+			#if %DETAIL_MAPPING
+			//////Wear
+			//red
+			diffuseWT = GetCustomTex(layer1WTDiffuseTex, IN.baseTC.xy * TilingScaleWear1);
+			normalMapWT = GetNormalMap(layer1WTNormalsTex, IN.baseTC.xy * TilingScaleWear1);
+			smoothnessWT = GetSmoothnessTex(layer1WTSmoothnessTex, IN.baseTC.xy * TilingScaleWear1);
+			blendFacW1 = blendFacW * blendFac + (fullOnes - blendFac); 
+			cAlbedo = lerp(diffuseWT * WearDiff1.xyz * DiffuseTintWear1.xyz, cAlbedo, blendFacW1);
+			cReflectance = lerp(WearSpec1.xyz, cReflectance, blendFacW1);
+			vNormalTS = lerp(normalMapWT, vNormalTS, blendFacW1);
+			fSmoothness = lerp(smoothnessWT * GlossMultWear1, fSmoothness, blendFacW1);
+
+			//green
+			diffuseWT = GetCustomTex(layer2WTDiffuseTex, IN.baseTC.xy * TilingScaleWear2);
+			normalMapWT = GetNormalMap(layer2WTNormalsTex, IN.baseTC.xy * TilingScaleWear2);
+			smoothnessWT = GetSmoothnessTex(layer2WTSmoothnessTex, IN.baseTC.xy * TilingScaleWear2);
+			blendFacW1 = blendFacW * blendFacG + (fullOnes - blendFacG);
+			cAlbedo = lerp(diffuseWT * WearDiff2.xyz * DiffuseTintWear2.xyz, cAlbedo, blendFacW1);
+			cReflectance = lerp(WearSpec2.xyz, cReflectance, blendFacW1);
+			vNormalTS = lerp(normalMapWT, vNormalTS, blendFacW1);
+			fSmoothness = lerp(smoothnessWT * GlossMultWear2, fSmoothness, blendFacW1);
+
+			//blue
+			diffuseWT = GetCustomTex(layer3WTDiffuseTex, IN.baseTC.xy * TilingScaleWear3);
+			normalMapWT = GetNormalMap(layer3WTNormalsTex, IN.baseTC.xy * TilingScaleWear3);
+			smoothnessWT = GetSmoothnessTex(layer3WTSmoothnessTex, IN.baseTC.xy * TilingScaleWear3);
+			blendFacW1 = blendFacW * blendFacB + (fullOnes - blendFacB);
+			cAlbedo = lerp(diffuseWT * WearDiff3.xyz * DiffuseTintWear3.xyz, cAlbedo, blendFacW1);
+			cReflectance = lerp(WearSpec3.xyz, cReflectance, blendFacW1);
+			vNormalTS = lerp(normalMapWT, vNormalTS, blendFacW1);
+			fSmoothness = lerp(smoothnessWT * GlossMultWear3, fSmoothness, blendFacW1);
+
+			//alpha
+			diffuseWT = GetCustomTex(layer4WTDiffuseTex, IN.baseTC.xy * TilingScaleWear4);
+			normalMapWT = GetNormalMap(layer4WTNormalsTex, IN.baseTC.xy * TilingScaleWear4);
+			smoothnessWT = GetSmoothnessTex(layer4WTSmoothnessTex, IN.baseTC.xy * TilingScaleWear4);
+			blendFacW1 = blendFacW * blendFacA + (fullOnes - blendFacA);
+			cAlbedo = lerp(diffuseWT * WearDiff4.xyz * DiffuseTintWear4.xyz, cAlbedo, blendFacW1);
+			cReflectance = lerp(WearSpec4.xyz, cReflectance, blendFacW1);
+			vNormalTS = lerp(normalMapWT, vNormalTS, blendFacW1);
+			fSmoothness = lerp(smoothnessWT * GlossMultWear4, fSmoothness, blendFacW1);
+
+			//Dirt
+			cAlbedo = lerp(DirtColor.xyz, cAlbedo, blendFacD);
+			cReflectance = lerp(0, cReflectance, blendFacD);
+
+			//Ambient Occlusion
+			cAlbedo = lerp(0, cAlbedo, blendFacAO);
+			cReflectance = lerp(0, cReflectance, blendFacAO);
+		#endif
+	#endif
+
+
+	#if %DECAL	
+		//cReflectance.xyz = GetLuminance(cReflectance.xyz);
+	#endif
+
+	cAlbedo = abs(cAlbedo);
+	cAlbedo *= MatDifColor.rgb; 
+
+	attribs.Smoothness = fSmoothness;
+	attribs.Albedo = cAlbedo;
+	attribs.Reflectance = cReflectance;
+	attribs.Smoothness = fSmoothness;
+
+	#if %NORMAL_MAP || %BLENDLAYER || %DETAIL_MAPPING || %HIGHRES_LAYERS
+		attribs.NormalWorld = normalize(mul(vNormalTS, mTangentToWS));
+	#endif
+	
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output SSS
+	
+	attribs.LightingModel = LIGHTINGMODEL_STANDARD;
+	attribs.Transmittance = 0;
+	attribs.ScatteringIndex = 0;
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output translucency and SSS
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output self-shadowing
+	
+	half fSelfShadowing = 0;
+
+#if !%DECAL	
+	if (mdQuality == MICRO_DETAIL_QUALITY_SPM || mdQuality == MICRO_DETAIL_QUALITY_POM || mdQuality == MICRO_DETAIL_QUALITY_OBM)
+	{
+	#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		const float2 DetailTiling = CM_SilPomDetailParams.xy;
+		//const float2 DetailTiling = float2(1, 1);
+	#else
+		const float2 DetailTiling = float2(1, 1);
+	#endif
+
+		const float3 light = normalize(mul((float3x3)mTangentToWS, g_PS_SunLightDir.xyz) * pomAdjustRayForNonSquareTexres);
+		const float2 lightDelta = float2(light.x, light.y) * mdDisplacement * DetailTiling;
+
+		const float2 uv = IN.baseTC.xy * DetailTiling;
+		const float h0 = GetBlendedHeight(uv, blendFac, blendLayer2Tiling);
+		float h = h0;
+
+		if (mdQuality == MICRO_DETAIL_QUALITY_SPM || mdQuality == MICRO_DETAIL_QUALITY_POM)
+		{
+			h = max(0, GetBlendedHeight(uv + 1.000 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.875 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.750 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.625 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.500 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.375 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.250 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.125 * lightDelta, blendFac, blendLayer2Tiling));
+		}
+		else
+		{
+			h = max(h, GetBlendedHeight(uv + 1.000 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.666 * lightDelta, blendFac, blendLayer2Tiling));
+			h = max(h, GetBlendedHeight(uv + 0.333 * lightDelta, blendFac, blendLayer2Tiling));
+		}
+
+		fSelfShadowing = saturate((h - h0) * mdSelfShadowStrength);
+		
+		if (mdSelfShadowStrength > 0)
+			attribs.LightingModel = LIGHTINGMODEL_POM_SS;
+	}
+#endif
+
+	attribs.SelfShadowingSun = fSelfShadowing;
+	
+	//ApplyVegetationTerrainColor(IN, attribs);
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Output to GBuffer
+	
+#if %_RT_SAMPLE0
+	EncodeMicroGBuffer( attribs, OUT.GBufferA, IN.WPos.xy );
+#else
+	EncodeGBuffer( attribs, OUT.GBufferA, OUT.GBufferB, OUT.GBufferC );
+#endif
+
+#if %_RT_SPRITE
+	OUT.GBufferB.w = diffuseMap.a * 2.0;
+	OUT.GBufferB.xyz *= OUT.GBufferB.xyz;
+#endif 
+
+	////////////////////////////////////////////////////////////////////////////////////////////////
+	// Velocity
+	
+#if %_RT_MOTION_BLUR && !%_RT_ALPHABLEND
+	float2 ScreenTCPrev = IN.HPosPrev.xy / IN.HPosPrev.z;
+	ScreenTCPrev = MapViewportToRaster(ScreenTCPrev);
+	OUT.VelocityRT = OutputVelocityRT(IN.WPos.xy * (CV_ScreenSize.zw * 2), ScreenTCPrev);
+#endif
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  // Alpha
+
+  #if %_RT_ALPHABLEND      
+    half fAlpha;
+		
+		fAlpha = GetAlphaTex(diffuseTex, IN.baseTC.xy) * MatDifColor.a;
+
+		#if %VERTCOLORS
+			fAlpha *= IN.Color.a;
+		#endif
+		#if %DECAL
+			#if !%_TT_TEXCOORD_PROJ
+				fAlpha *= GetOpacityTex(DecalOpacityTex, IN.baseTC.zw);
+			#else
+				fAlpha *= GetOpacityTex(DecalOpacityTex, IN.baseTC.xy);
+			#endif
+			#if !%DIRTLAYER
+				fAlpha = saturate(pow(fAlpha * DecalAlphaMult, DecalFalloff));
+			#endif
+		#endif
+		
+		fAlpha = saturate( fAlpha );
+		half fAlphaDiffuse = fAlpha;
+
+		half fAlphaNormal = fAlpha;
+		half fAlphaSpecular = fAlpha;
+
+		#if %DECAL && !%DIRTLAYER
+			fAlphaDiffuse *= DecalDiffuseOpacity;
+			fAlphaNormal *= DecalNormalOpacity;
+			fAlphaSpecular *= DecalSpecularOpacity;
+		#endif
+		
+		#if %_RT_SAMPLE0
+			OUT.GBufferA.w = fAlpha;
+		#else
+			SetGBufferBlending( OUT.GBufferA, OUT.GBufferB, OUT.GBufferC, fAlphaNormal, fAlphaDiffuse, fAlphaSpecular);
+		#endif
+  #endif
+
+	return OUT;
+}
+
+#include "CommonZPassTess.cfi"
+
+//////////////////////////////// technique ////////////////
+
+technique ZPass
+{
+	pass p0
+	{
+		VertexShader = Common_ZPassVS() ZVS;
+#if ENABLE_TESSELLATION
+		HullShader   = Common_ZPassHS() GeneralHS;
+		DomainShader = Common_ZPassDS() GeneralDS;
+#endif
+
+// TODO: Make SilPOM work with NVidia multires
+#if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
+		GeometryShader = Common_ZPassGS() ZGS;
+#else
+		GeometryShader = $AutoGS_MultiRes();
+#endif
+
+		PixelShader = Common_ZPassPS() ZPS;
+
+		ZEnable = true;
+		ZWriteEnable = true;
+		CullMode = Back;
+     
+#if %GRASS || %LEAVES || %HAIR_PASS
+		CullMode = None;
+#endif
+	}
+}

@@ -33,7 +33,7 @@ HS_CONTROL_POINT_OUTPUT_ILLUM IllumHS(InputPatch<vert2FragGeneral, 3> inputPatch
 	output.vTangent                = inputPatch[uCPID].vTangent;
 	output.vBinormal               = inputPatch[uCPID].vBinormal;
 #endif
-#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER
+#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER || %BLENDLAYERLB
 	output.Color                   = inputPatch[uCPID].Color;
 #endif
 
@@ -50,7 +50,7 @@ void FillEvalInput(in const OutputPatch<HS_CONTROL_POINT_OUTPUT_ILLUM, 3> triPat
 #if %_RT_FOG || %ANISO_SPECULAR || %TEMP_EYES || %OFFSET_BUMP_MAPPING || %PARALLAX_OCCLUSION_MAPPING || %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
 	FillEvalInputTangentBinormal(triPatch[0].vTangent, triPatch[1].vTangent, triPatch[2].vTangent, triPatch[0].vBinormal, triPatch[1].vBinormal, triPatch[2].vBinormal, evalInput);
 #endif
-#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER
+#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER || %BLENDLAYERLB
 	FillEvalInputColor(triPatch[0].Color, triPatch[1].Color, triPatch[2].Color, evalInput);
 #endif
 	evalInput.vViewPos = g_VS_WorldViewPos.xyz;

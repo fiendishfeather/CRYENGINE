@@ -1,4 +1,5 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// CRYENGINE Source Code File
+// Copyright 2001-2015 Crytek GmbH. All rights reserved.
 
 #include "Common.cfi"
 #include "IllumValidations.cfi"
@@ -11,12 +12,9 @@ float Script : STANDARDSGLOBAL
 	#if %DECAL
 		"Decal;"
 	#endif     
-    // #if %DECAL_MULTIPLY_BASE_COLOR
-		// "Decal2;" 
-	// #endif  
-	//#if %VERTCOLORS
+	#if %VERTCOLORS
 		"VertexColors"
-	//#endif
+	#endif
 	#if %BILLBOARD
 		"Billboard"
 	#endif
@@ -74,40 +72,12 @@ struct CustomForwardShadingAttribs
   Texture2D smoothness2Tex : register(t7) = TM_DecalOverlay;
 #endif
 
-#if %DECAL 
+#if %DECAL
   Texture2D DecalOpacityTex : register(t11)
   <
     UIName = "Decal Opacity Map";
     UIDescription = "Opacity map for decal";
   > = TM_Opacity;
-  
-  
-  
-  //Texture2D  <float4> sceneGBufferB       : register(t40) = TS_SceneDiffuse;
-  //Texture2D   sceneGBufferB      : register(t39)                                   = TS_SceneDiffuse;
-  //Texture2D   sceneDiffuseTex                                                   = $SceneDiffuse;
-  
-  //PERLIN_NOISE_MAP
-  //SCENE_DEPTH_MAP
-  // Texture2D   ECGT_BackBuffer          : register(t28)                                   = TS_BackBuffer;
-  // Texture2D   ECGT_BackBufferScaled_d2 : register(t29)                                   = TS_BackBufferScaled_d2;
-  // Texture2D   ECGT_BackBufferScaled_d4 : register(t30)                                   = TS_BackBufferScaled_d4;
-  // Texture2D   ECGT_BackBufferScaled_d8 : register(t31)                                   = TS_BackBufferScaled_d8;
-  
-  // Texture2D   ECGT_ZTarget          : register(t32)                                   = TS_ZTarget;
-  // Texture2D   ECGT_ZTargetMS        : register(t33)                                   = TS_ZTargetMS;
-  // Texture2D   ECGT_ZTargetScaled_d2 : register(t34)                                   = TS_ZTargetScaled_d2;
-  // Texture2D   ECGT_ZTargetScaled_d4 : register(t35)                                   = TS_ZTargetScaled_d4;
-  // Texture2D   ECGT_SceneTarget      : register(t36)                                   = TS_SceneTarget;
-  // Texture2D   ECGT_SceneNormalsBent : register(t37)                                   = TS_SceneNormalsBent;
-  // Texture2D   ECGT_SceneNormals     : register(t38)                                   = TS_SceneNormals;
-  // Texture2D   ECGT_SceneDiffuse     : register(t39)                                   = TS_SceneDiffuse;
-  
-  // Texture2D   ECGT_SceneSpecular     : register(t40)                                   = TS_SceneSpecular;
-  // Texture2D   ECGT_SceneDiffuseAcc   : register(t41)                                   = TS_SceneDiffuseAcc;
-  // Texture2D   ECGT_SceneSpecularAcc  : register(t42)                                   = TS_SceneSpecularAcc;
-  // Texture2D   ECGT_SceneNormalsMS    : register(t43)                                   = TS_SceneNormalsMapMS;
-  // Texture2D   ECGT_SceneDiffuseAccMS : register(t44)                                   = TS_SceneDiffuseAccMS; 
 #endif
 
 Texture2D emittanceTex : register(t13)
@@ -116,8 +86,6 @@ Texture2D emittanceTex : register(t13)
   UIDescription = "Emittance color/intensity map";
 > = TM_Emittance;
 
-//SCENE_TARGET_MAP
-//SCENE_DIFFUSE_MAP
 ENVIRONMENTCUBEMAP
 DISSOLVE_NOISE_MAP
 
@@ -408,7 +376,7 @@ float4 BlendLayer2SpecularColor
   string UIHelp = "BlendLayer2SpecularColor";                   
   string UIName = "BlendLayer2SpecularColor";    
   string UIWidget = "color";
-> = {0.04, 0.04, 0.04, 0.04};
+> = {1.0, 1.0, 1.0, 1.0};
 
 float4 BlendLayer2DiffuseColor
 <
@@ -488,7 +456,7 @@ float DecalDiffuseOpacity
   float UIMin = 0;
   float UIMax = 1;
   float UIStep = 0.01;
-> = 1;
+> = 0;
 
 float DecalNormalOpacity
 <
@@ -510,7 +478,7 @@ float DecalSpecularOpacity
 	float UIMin = 0;
 	float UIMax = 1;
 	float UIStep = 0.01;
-> = 1;
+> = 0;
 
 #endif
 
@@ -739,6 +707,7 @@ void Callback_ShadingDirect(in ForwardShadingAttribs attribs, in ForwardLightPar
 	specularAcc = specularAcc * light.illuminance;
 }
 
+#include "TiledShading.cfi"
 #include "ForwardShading.cfi"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -761,11 +730,7 @@ pixout IlluminationPS(vert2FragGeneral IN)
 	if (bEmissive)
 	{
 		emittance *= GetEmittanceMask(IN.baseTC);
-		#if %VERTCOLORS 
-	       emittance *= IN.Color.rgb;
-	    #endif
 	}
-	
 
 #if !%_RT_SECONDARY_VIEW  // Do additive glow pass just when deferred shading is on
 	if (bEmissive && MatDifColor.w == 1)
@@ -813,7 +778,7 @@ pixout IlluminationPS(vert2FragGeneral IN)
 	Fwd_ApplyFog(worldPos.xyz, IN.vView.xyz, IN.WPos, OUT.Color.rgb);
 
 	return OUT;
-} 
+}
 
 #include "IllumTess.cfi"
 
@@ -850,7 +815,7 @@ technique General
 #endif
 
 		PixelShader = IlluminationPS() GeneralPS;
-    
+
 #if %DECAL
 		ZEnable = true;    
 		ZWriteEnable = false;    
@@ -860,7 +825,7 @@ technique General
 		ZEnable = true;    
 		ZWriteEnable = true;    
 		CullMode = Back;
-#endif    
+#endif        
 	}
 }
 

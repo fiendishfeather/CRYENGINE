@@ -4,16 +4,18 @@
 //  Shader extension
 //  Copyright (C), Crytek Studios, 2001-2004.
 // -------------------------------------------------------------------------
-//  File name:   Particles.ext
+//  File name:   Monitor.ext
 //  Version:     v1.00
-//  Created:     16/2/2004 by Andrey Honich.
+//  Created:     06/07/2005 by Tiago Sousa
 //  Compilers:   
-//  Description: Particles shader extension used by the editor
-//               for automatic shader generation (based on "Particles" shader template)
+//  Description: Monitor shader extension used by the editor
+//               for automatic shader generation
 // -------------------------------------------------------------------------
 //  History:
 //
 ////////////////////////////////////////////////////////////////////////////
+
+
 
 Version (1.00)
 
@@ -30,23 +32,31 @@ Property
 
 Property
 {
-  Name = %DIFFUSE
+  Name = %NORMAL_MAP
   Mask = 0x1
+  Property    (Normal map)
+  Description (Use normal-map texture)
+  DependencySet = $TEX_Normals
+  DependencyReset = $TEX_Normals
   Hidden
 }
 
 Property
 {
-  Name = %SIMPLE
+  Name = %SPECULAR_MAP
   Mask = 0x2
-  Property    (Simple distance clouds)
-  Description (Use distance clouds with no volumetric shading computations)
+  Property    (Specular map)
+  Description (Use specular map as separate texture)
+  DependencySet = $TEX_Specular
+  DependencyReset = $TEX_Specular
+  Hidden  
 }
 
 Property
 {
-  Name = %ADVANCED
+  Name = %PIXELIZE
   Mask = 0x4
-  Property    (Advanced distance clouds)
-  Description (Use distance clouds with more accurate shading computations)
+  Property    (Pixelized)
+  Description (Pixelize the diffuse texture.)
 }
+

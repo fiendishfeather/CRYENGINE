@@ -99,7 +99,7 @@ pixout_mb MeshBakerComplex_PS(v2f IN)
 	MaterialAttribsCommon commonAttribs;
 	half3x3 mTangentToWS = half3x3(tangent.xyz, biNorm.xyz, cross(tangent.xyz, biNorm.xyz) * tangent.w);
 	half4 vertexColor = 0;
-#if %VERTCOLORS || %BLENDLAYER || %DIRTLAYER
+#if %VERTCOLORS || %BLENDLAYER || %DIRTLAYER || %BLENDLAYERLB
 	vertexColor = lerp(TRI_COLOR[0], lerp(TRI_COLOR[1], TRI_COLOR[2], alongEdge), alongFace);
 #endif
 	GatherMaterialAttribs(mTangentToWS, realCoord, vertexColor, commonAttribs);
