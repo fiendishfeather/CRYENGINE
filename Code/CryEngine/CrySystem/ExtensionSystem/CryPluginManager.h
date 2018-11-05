@@ -39,7 +39,8 @@ public:
 		}
 	}
 
-	virtual std::shared_ptr<Cry::IEnginePlugin> QueryPluginById(const CryClassID& classID) const override;
+	virtual std::shared_ptr<Cry::IEnginePlugin> QueryPluginById(const CryClassID& classID, string *path = nullptr) const override;
+	//virtual std::shared_ptr<Cry::IEnginePlugin> QueryPluginByPath(string *path) const override;
 	virtual void OnPluginUpdateFlagsChanged(Cry::IEnginePlugin& plugin, uint8 newFlags, uint8 changedStep) override;
 	// ~Cry::IPluginManager
 

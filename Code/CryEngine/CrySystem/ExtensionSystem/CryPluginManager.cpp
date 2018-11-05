@@ -486,8 +486,21 @@ void CCryPluginManager::UpdateAfterRenderSubmit()
 	}
 }
 
-std::shared_ptr<Cry::IEnginePlugin> CCryPluginManager::QueryPluginById(const CryClassID& classID) const
+std::shared_ptr<Cry::IEnginePlugin> CCryPluginManager::QueryPluginById(const CryClassID& classID, string *path) const
 {
+	if ((path != nullptr) && (path > (void*)0x0000000000000001))
+	{
+		for (const SPluginContainer& it : m_pluginContainer)
+		{  
+			if (it.m_module.m_engineModulePath.size() > 0)
+			{
+				if (it.m_module.m_engineModulePath.compare(path->c_str()) == 0)
+				{
+					return it.m_pPlugin; 
+				}
+			}
+		}
+	}
 	for (const SPluginContainer& it : m_pluginContainer)
 	{
 		ICryFactory* pFactory = it.GetPluginPtr()->GetFactory();
@@ -502,6 +515,26 @@ std::shared_ptr<Cry::IEnginePlugin> CCryPluginManager::QueryPluginById(const Cry
 
 	return nullptr;
 }
+
+//std::shared_ptr<Cry::IEnginePlugin> CCryPluginManager::QueryPluginByPath(string* path) const
+//{
+//	for (const SPluginContainer& it : m_pluginContainer)
+//	{
+//		ICryFactory* pFactory = it.GetPluginPtr()->GetFactory();
+//		if (pFactory)
+//		{
+//			if ((it.m_module.m_engineModulePath.size() > 0) && (path!=nullptr) && (path> (void*)0x0000000000000001))
+//			{
+//				if (it.m_module.m_engineModulePath.c_str() == path->c_str())
+//				{
+//					return it.m_pPlugin; 
+//				}
+//			}
+//		}
+//	}
+//
+//	return nullptr;
+//}
 
 void CCryPluginManager::OnPluginUpdateFlagsChanged(Cry::IEnginePlugin& plugin, uint8 newFlags, uint8 changedStep)
 {

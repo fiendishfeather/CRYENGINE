@@ -50,9 +50,9 @@ namespace Cry
 		//! Queries a plug-in by implementation (T has to implement Cry::IEnginePlugin)
 		//! This call can only succeed if the plug-in was specified in the running project's .cryproject file
 		template<typename T>
-		T* QueryPlugin() const
+		T* QueryPlugin(string *path = nullptr) const
 		{
-			if (ICryUnknownPtr pExtension = QueryPluginById(cryiidof<T>()))
+			if (ICryUnknownPtr pExtension = QueryPluginById(cryiidof<T>(), path))
 			{
 				return cryinterface_cast<T>(pExtension.get());
 			}
@@ -60,11 +60,23 @@ namespace Cry
 			return nullptr;
 		}
 
+		/*template<typename T>
+		T* QueryPluginWithPath(string* path) const
+		{
+			if (ICryUnknownPtr pExtension = QueryPluginByPath(path))
+			{
+				return cryinterface_cast<T>(pExtension.get());
+			}
+
+			return nullptr;
+		}*/
+
 	protected:
 		friend IEnginePlugin;
 		virtual void OnPluginUpdateFlagsChanged(IEnginePlugin& plugin, uint8 newFlags, uint8 changedStep) = 0;
 
-		virtual std::shared_ptr<Cry::IEnginePlugin> QueryPluginById(const CryClassID& classID) const = 0;
+		virtual std::shared_ptr<Cry::IEnginePlugin> QueryPluginById(const CryClassID& classID, string *path = nullptr) const = 0;
+		/*virtual std::shared_ptr<Cry::IEnginePlugin> QueryPluginByPath(string *path) const = 0;*/
 
 		virtual void RegisterEventListener(const CryClassID& pluginClassId, IEventListener* pListener) = 0;
 		virtual void RemoveEventListener(const CryClassID& pluginClassId, IEventListener* pListener) = 0;

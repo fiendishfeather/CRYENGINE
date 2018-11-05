@@ -118,7 +118,14 @@ namespace Cry
 		public:
 			CCameraComponent()
 			{
-				m_pCameraManager = gEnv->pSystem->GetIPluginManager()->QueryPlugin<IPlugin_CryDefaultEntities>()->GetICameraManager();
+				IPluginManager* pluginManager = gEnv->pSystem->GetIPluginManager();
+				CRY_ASSERT(pluginManager!=nullptr);
+				string path= "CryDefaultEntities";
+				IPlugin_CryDefaultEntities *pluginDefEnt = pluginManager->QueryPlugin<IPlugin_CryDefaultEntities>(&path);
+				CRY_ASSERT(pluginDefEnt != nullptr);
+				ICameraManager * camManager = pluginDefEnt->GetICameraManager();
+				CRY_ASSERT(camManager != nullptr);
+				m_pCameraManager = camManager;
 			}
 
 			virtual ~CCameraComponent() = default;
