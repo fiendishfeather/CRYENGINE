@@ -1519,10 +1519,10 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 
 		case eAnimParamType_Animation:
 			if (!animContext.bResetting)
-			{
-				if (animCharacterLayer < MAX_CHARACTER_TRACKS + ADDITIVE_LAYERS_OFFSET)
+			{ 
+				if (animCharacterLayer < MAX_CHARACTER_TRACKS + ADDITIVE_LAYERS_OFFSET + LAYERS_OFFSET)
 				{
-					int index = animCharacterLayer;
+					int index = animCharacterLayer + LAYERS_OFFSET;
 					CCharacterTrack* pCharTrack = (CCharacterTrack*)pTrack;
 
 					if (pCharTrack->GetAnimationLayerIndex() >= 0)   // If the track has an animation layer specified,
@@ -1541,9 +1541,9 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 						}
 					}
 
-					if (animCharacterLayer == 0)
+					if (animCharacterLayer == 0 + LAYERS_OFFSET)
 					{
-						animCharacterLayer += ADDITIVE_LAYERS_OFFSET;
+						animCharacterLayer += ADDITIVE_LAYERS_OFFSET + LAYERS_OFFSET;
 					}
 
 					++animCharacterLayer;
@@ -2036,7 +2036,7 @@ void CAnimEntityNode::ApplyEventKey(CEventTrack* track, int keyIndex, SEventKey&
 
 			ISkeletonAnim* pSkeletonAnimation = pCharacter->GetISkeletonAnim();
 
-			aparams.m_nLayerID = 0;
+			aparams.m_nLayerID = 0 + LAYERS_OFFSET;
 			pSkeletonAnimation->StartAnimation(key.m_animation, aparams);
 
 			IAnimationSet* pAnimations = pCharacter->GetIAnimationSet();
@@ -2173,10 +2173,19 @@ void CAnimEntityNode::ReleaseAllAnims()
 	{
 		pCharacter->GetISkeletonAnim()->SetTrackViewExclusive(0);
 
-		pCharacter->GetISkeletonAnim()->StopAnimationsAllLayers();
-
-		pCharacter->SetPlaybackScale(1.0000f);
+		//pCharacter->GetISkeletonAnim()->StopAnimationsAllLayers();
+		//stop anims on all layers except first (base) layer - locomotion is there
+		if (LAYERS_OFFSET > 0)
+		{
+			for (uint32 i = 1; i < ISkeletonAnim::LayerCount; i++)
+				pCharacter->GetISkeletonAnim()->ClearFIFOLayer(i);
+		}
+		else
+		{
+			pCharacter->GetISkeletonAnim()->StopAnimationsAllLayers(); 
+		}
 		pCharacter->GetISkeletonAnim()->SetAnimationDrivenMotion(m_bWasTransRot);
+		pCharacter->SetPlaybackScale(1.0000f);
 		m_baseAnimState.m_layerPlaysAnimation[0] = m_baseAnimState.m_layerPlaysAnimation[1] = m_baseAnimState.m_layerPlaysAnimation[2] = false;
 
 		NotifyEntityScript(pEntity, "OnSequenceAnimationStop");
@@ -2443,9 +2452,19 @@ void CAnimEntityNode::AnimateCharacterTrack(class CCharacterTrack* pTrack, SAnim
 		{
 			// There is no animation left playing - exit TrackViewExclusive mode
 			pCharacter->GetISkeletonAnim()->SetTrackViewExclusive(0);
-			pCharacter->GetISkeletonAnim()->StopAnimationsAllLayers();
-			pCharacter->SetPlaybackScale(1.0000f);
+			//pCharacter->GetISkeletonAnim()->StopAnimationsAllLayers();
+			//stop anims on all layers except first (base) layer - locomotion is there
+			if (LAYERS_OFFSET > 0)
+			{
+				for (uint32 i = 1; i < ISkeletonAnim::LayerCount; i++)
+					pCharacter->GetISkeletonAnim()->ClearFIFOLayer(i);
+			}
+			else
+			{
+				pCharacter->GetISkeletonAnim()->StopAnimationsAllLayers();
+			} 
 			pCharacter->GetISkeletonAnim()->SetAnimationDrivenMotion(m_bWasTransRot);
+			pCharacter->SetPlaybackScale(1.0000f); 
 			m_bIsAnimDriven = false;
 			NotifyEntityScript(pEntity, "OnSequenceAnimationStop");
 			return;
@@ -2470,6 +2489,20 @@ void CAnimEntityNode::AnimateCharacterTrack(class CCharacterTrack* pTrack, SAnim
 			UpdateAnimBlendGap(activeKeys, pTrack, animContext.time, pCharacter, layer);
 		}
 	}
+
+	//if using locomotion in base layer
+	/*if (LAYERS_OFFSET > 0)
+	{
+		if (pCharacter->GetPlaybackScale()==0.0f)
+		{ 
+			CAnimation anim = pCharacter->GetISkeletonAnim()->GetAnimFromFIFO(0,0);
+			float duration = anim.GetExpectedTotalDurationSeconds();  
+			float t = fmod(animContext.time.ToFloat(), duration); 
+			float fNormalizedTime = t / duration; 
+			pCharacter->GetISkeletonAnim()->ManualSeekAnimationInFIFO(0, 0, fNormalizedTime, false);
+			pCharacter->GetISkeletonAnim()->SetLayerNormalizedTime(0, fNormalizedTime);
+		}
+	}*/
 }
 
 void CAnimEntityNode::StopExpressions()
@@ -2979,11 +3012,20 @@ void CAnimEntityNode::ApplyAnimKey(int32 keyIndex, class CCharacterTrack* track,
 			t = maxEndTime;
 		}
 
-		pCharacter->SetPlaybackScale(0.0000f);
+		//pCharacter->SetPlaybackScale(0.0000f);
+		if (LAYERS_OFFSET > 0)
+		{
+			for (uint32 i = 1; i < ISkeletonAnim::LayerCount; i++)
+				pCharacter->GetISkeletonAnim()->SetLayerPlaybackScale(i,0.0f);
+		}
+		else
+		{
+			pCharacter->SetPlaybackScale(0.0000f);
+		}
 		float fNormalizedTime = t / duration;
 		assert(fNormalizedTime >= 0.0f && fNormalizedTime <= 1.0f);
 		pCharacter->GetISkeletonAnim()->ManualSeekAnimationInFIFO(layer, animIndex, fNormalizedTime, bAnimEvents);
-		pCharacter->GetISkeletonAnim()->SetLayerNormalizedTime(layer, fNormalizedTime);
+		pCharacter->GetISkeletonAnim()->SetLayerNormalizedTime(layer, fNormalizedTime); 
 	}
 }
 
@@ -3071,7 +3113,16 @@ void CAnimEntityNode::UpdateAnimBlendGap(int32 activeKeys[], class CCharacterTra
 		blendWeight = (t / t0).ToFloat();
 	}
 
-	pCharacter->SetPlaybackScale(0.0000f);
+	//pCharacter->SetPlaybackScale(0.0000f);
+	if (LAYERS_OFFSET > 0)
+	{
+		for (uint32 i = 1; i < ISkeletonAnim::LayerCount; i++)
+			pCharacter->GetISkeletonAnim()->SetLayerPlaybackScale(i, 0.0f);
+	}
+	else
+	{
+		pCharacter->SetPlaybackScale(0.0000f);
+	}
 	f32 endTimeNorm = 1.0f;
 
 	if (key1.GetAnimDuration() > 0.0f)

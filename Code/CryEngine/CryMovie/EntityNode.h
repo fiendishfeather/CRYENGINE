@@ -13,6 +13,7 @@
 #define MAX_CHARACTER_TRACKS   3
 #define ADDITIVE_LAYERS_OFFSET 6
 #define DEFAULT_LOOKIK_LAYER   15
+#define LAYERS_OFFSET          1
 
 // When preloading of a trackview sequence is triggered, the animations in
 // the interval [0 ; ANIMATION_KEY_PRELOAD_INTERVAL] are preloaded into memory.
