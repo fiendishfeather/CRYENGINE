@@ -1526,6 +1526,10 @@ public:
 	{
 		return m_activeTime;
 	}
+	float GetQueueTime() const
+	{
+		return m_queueTime;
+	}
 	virtual void Install()
 	{
 		if (m_eStatus != Finished)

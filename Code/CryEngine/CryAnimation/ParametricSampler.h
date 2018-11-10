@@ -20,8 +20,8 @@ struct BC8
 	f32 w0, w1, w2, w3, w4, w5, w6, w7;
 };
 
-#define MAX_LMG_ANIMS    (40)
-#define MAX_LMG_EXAMPLES (64)
+#define MAX_LMG_ANIMS    (64)
+#define MAX_LMG_EXAMPLES (128)
 
 struct SParametricSamplerInternal : public SParametricSampler
 {

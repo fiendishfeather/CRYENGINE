@@ -1427,6 +1427,40 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 				CMannequinTrack* pMannequinTrack = (CMannequinTrack*)pTrack;
 				SMannequinKey manKey;
 				int key = pMannequinTrack->GetActiveKey(animContext.time, &manKey);
+				
+				int32 activeKeys[2] = { -1, -1 };
+				//int32 numActiveKeys = GetActiveKeys(activeKeys, animContext.time, pMannequinTrack);
+
+				IGameObject* pGameObject;
+				IAnimatedCharacter* pAnimChar;  
+
+				float keyDuration = manKey.m_duration;
+
+				if ((key == -1) || animContext.bResetting || animContext.bSingleFrame)//animState.m_bTimeJumped[trackIndex] == false; animContext.;anim
+				{
+					for (std::map<IAction*, std::vector<TagID>>::iterator it = m_mannequinActions.begin(); it != m_mannequinActions.end();)
+					{
+						IAction* action = it->first;
+						if((action->GetStatus() >= 0) && (action->GetStatus() <= IAction::EStatus::Finished))
+							action->ForceFinish();
+						it++;
+					}
+					m_mannequinActions.clear();
+					if (key >= 0)
+					{
+						keyDuration = keyDuration - (animContext.time - manKey.m_time);
+					}
+				}
+
+				if (pMannequinTrack->GetNumKeys()>0)
+				{
+					pGameObject = gEnv->pGameFramework->GetGameObject(pEntity->GetId());
+					if (pGameObject)
+					{
+						pAnimChar = (IAnimatedCharacter*)pGameObject->QueryExtension("AnimatedCharacter");
+						ProcessManequinActions(pAnimChar->GetActionController());
+					}
+				} 
 
 				if (key >= 0)
 				{
@@ -1437,13 +1471,10 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 					{
 						m_iCurMannequinKey = key;
 
-						const uint32 valueName = CCrc32::ComputeLowercase(manKey.m_fragmentName);
-						IGameObject* pGameObject = gEnv->pGameFramework->GetGameObject(pEntity->GetId());
+						const uint32 valueName = CCrc32::ComputeLowercase(manKey.m_fragmentName); 
 
 						if (pGameObject)
 						{
-							IAnimatedCharacter* pAnimChar = (IAnimatedCharacter*) pGameObject->QueryExtension("AnimatedCharacter");
-
 							if (pAnimChar)
 							{
 								const FragmentID fragID = pAnimChar->GetActionController()->GetContext().controllerDef.m_fragmentIDs.Find(valueName);
@@ -1453,6 +1484,7 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 								// Find tags
 								string tagName = manKey.m_tags;
 								TagState tagState = TAG_STATE_EMPTY;
+								std::vector<TagID> activeTags;
 
 								if (!tagName.empty())
 								{
@@ -1473,6 +1505,7 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 											const TagID tagID = tagDefinition->Find(tagCRC);
 											found = tagID != TAG_ID_INVALID;
 											tagDefinition->Set(tagState, tagID, true);
+											if (found)activeTags.push_back(tagID);
 										}
 
 										if (!found)
@@ -1485,6 +1518,7 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 												const TagID tagID = tagDefinition->Find(tagCRC);
 												found = tagID != TAG_ID_INVALID;
 												tagDefinition->Set(tagState, tagID, true);
+												if (found)activeTags.push_back(tagID);
 											}
 
 											if (!found)
@@ -1493,6 +1527,7 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 												if (tagID != TAG_ID_INVALID)
 												{
 													pAnimChar->GetActionController()->GetContext().state.Set(tagID, true);
+													activeTags.push_back(tagID);
 												}
 											}
 										}
@@ -1502,8 +1537,10 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 
 								}
 
-								IAction* pAction = new TAction<SAnimationContext>(manKey.m_priority, fragID, tagState, 0u, 0xffffffff);
-								pAnimChar->GetActionController()->Queue(*pAction);
+								IAction *pAction (new TAction<SAnimationContext>(manKey.m_priority, fragID, tagState, 0u, 0xffffffff));
+								pAnimChar->GetActionController()->Queue(*pAction, keyDuration);
+								m_mannequinActions.insert(std::make_pair(pAction, activeTags));
+								
 							}
 						}
 					}
@@ -1637,6 +1674,25 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 		const bool bUsePhysics = stl::get<bool>(pPhysicalizeTrack->GetValue(m_time));
 		EnableEntityPhysics(bUsePhysics);
 	}
+	
+	bool afterLastPosKey = false;
+	if (pPosTrack->GetNumKeys()>0)
+	{
+		STrackKey lastPosKey;
+		SAnimTime posSubTrackMaxTime=0.0f;
+		for (int i=0;i<pPosTrack->GetSubTrackCount();i++)
+		{
+			pPosTrack->GetSubTrack(i)->GetKey(pPosTrack->GetSubTrack(i)->GetNumKeys()-1, &lastPosKey);
+			if (lastPosKey.m_time> posSubTrackMaxTime)
+			{
+				posSubTrackMaxTime = lastPosKey.m_time;
+			}
+		} 
+		if (animContext.time > posSubTrackMaxTime)
+		{
+			afterLastPosKey = true;
+		}
+	}
 
 	// [*DavidR | 6/Oct/2010] Positioning an entity when ragdollized will not look good at all :)
 	// Note: Articulated != ragdoll in some cases. And kinematic(mass 0) articulated entities could allow
@@ -1654,7 +1710,7 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 		// no callback specified, so lets move the entity directly
 		if (!m_pOwner)
 		{
-			if (entityUpdateFlags)
+			if (entityUpdateFlags && (!afterLastPosKey))
 			{
 				UpdateEntityPosRotVel(m_pos, m_rotate, animContext.time == SAnimTime(0), (EUpdateEntityFlags)entityUpdateFlags, animContext.time);
 			}
@@ -1675,9 +1731,63 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 	if (m_pOwner)
 	{
 		m_bIgnoreSetParam = true; // Prevents feedback change of track.
-		m_pOwner->OnNodeAnimated(this);
+		if((!afterLastPosKey))m_pOwner->OnNodeAnimated(this);
 		m_bIgnoreSetParam = false;
 	}
+}
+
+void CAnimEntityNode::ProcessManequinActions(IActionController* controller)
+{
+	bool dontClearState = false;
+	for (std::map<IAction*, std::vector<TagID>>::iterator it = m_mannequinActions.begin(); it != m_mannequinActions.end();)
+	{
+		IAction *action = it->first; 
+		if ((action->GetStatus() == IAction::EStatus::Finished) || (action->GetStatus() == IAction::EStatus::None) ||
+			(action->GetStatus()<0)||(action->GetStatus()> IAction::EStatus::Finished)||(action->GetActiveTime()>(action->GetQueueTime()*2.0f)))
+		{
+			//turn off tags
+			std::vector<TagID> tags = it->second;
+			std::map<IAction*, std::vector<TagID>>::iterator itNext = it;
+			++itNext;
+			std::vector<TagID> tagsNext;
+			if (itNext!= m_mannequinActions.end())
+			{
+				tagsNext = itNext->second;
+			}
+			else
+			{
+				tagsNext.clear();//only for debug
+				dontClearState = true;
+			}
+			if (!dontClearState)
+			{
+				for (std::vector<TagID>::iterator itv = tags.begin(); itv != tags.end(); itv++)
+				{
+					TagID tag = *itv;
+					if (!tagsNext.empty())
+					{
+						if (std::find(tagsNext.begin(), tagsNext.end(), tag) == tagsNext.end())
+							controller->GetContext().state.Set(tag, false);
+					}
+					else
+					{
+						controller->GetContext().state.Set(tag, false);
+					}
+				}
+			}
+			if ((action->GetStatus() >= 0)&& (action->GetStatus() <= IAction::EStatus::Finished))
+			{
+				if ((action->GetActiveTime() > (action->GetQueueTime()*2.0f)))action->ForceFinish();
+			}
+			//erase action from map
+			it = m_mannequinActions.erase(it);
+		}
+		else
+		{
+			it++;
+		}
+	}
+
 }
 
 void CAnimEntityNode::StopAudio()

@@ -172,6 +172,8 @@ private:
 	void StopEntity();
 	void UpdateTargetCamera(IEntity* pEntity, const Quat& rotation);
 	void RestoreEntityDefaultValues();
+	//check actions for finished and deactivate corresponding TagIds
+	void ProcessManequinActions(IActionController* controller);
 
 	//! Reference to game entity.
 	EntityGUID       m_entityGuid;
@@ -290,6 +292,7 @@ private:
 
 	std::vector<std::unique_ptr<IPropertyParamInfo>> m_entityProperties;
 	std::unordered_map<string, size_t, stl::hash_stricmp<string>, stl::hash_stricmp<string>> m_entityPropertyNameLookupMap;
+	std::multimap<IAction*, std::vector<TagID>> m_mannequinActions;
 #ifdef CHECK_FOR_TOO_MANY_ONPROPERTY_SCRIPT_CALLS
 	uint32                                m_OnPropertyCalls;
 #endif
