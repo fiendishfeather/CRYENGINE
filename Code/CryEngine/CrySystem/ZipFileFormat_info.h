@@ -2,6 +2,19 @@
 
 #include "ZipFileFormat.h"
 
+STRUCT_INFO_BEGIN(ZipFile::CDREnd64)
+VAR_INFO(lSignature)
+VAR_INFO(lCDREnd64Size)
+VAR_INFO(lVerMadeBy)
+VAR_INFO(lVerToExt)
+VAR_INFO(nDisk)
+VAR_INFO(nCDRStartDisk)
+VAR_INFO(numEntriesOnDisk)
+VAR_INFO(numEntriesTotal)
+VAR_INFO(lCDRSize)
+VAR_INFO(lCDROffset)
+STRUCT_INFO_END(ZipFile::CDREnd64)
+
 STRUCT_INFO_BEGIN(ZipFile::CDREnd)
 VAR_INFO(lSignature)
 VAR_INFO(nDisk)

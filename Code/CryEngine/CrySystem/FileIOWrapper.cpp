@@ -126,7 +126,11 @@ int CIOWrapper::FError(FILE* hFile)
 
 int CIOWrapper::Fseek(FILE* hFile, int64 seek, int mode)
 {
+#if CRY_PLATFORM_LINUX || CRY_PLATFORM_ANDROID || CRY_PLATFORM_APPLE || CRY_PLATFORM_ORBIS
 	return fseek(hFile, (long)seek, mode);
+#else
+	return _fseeki64(hFile, seek, mode);
+#endif
 }
 
 void CIOWrapper::LockReadIO(bool lock)

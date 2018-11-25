@@ -292,6 +292,13 @@ struct SExtraZipFileData
 	uint32 nLastModifyTime_Lo;
 	uint32 nLastModifyTime_Hi;
 };
+struct SExtraZipFileDataZip64
+{
+	uint64 lOriginalSize;      // 8 bytes    Original uncompressed file size 
+	uint64 lCompressedSize;    // 8 bytes    Size of compressed data
+	uint64 lLocalHeaderOffset; // 8 bytes    Offset of local header record
+	uint32 nDiskStartNumber;   // 4 bytes    Number of the disk on which this file starts
+};
 
 #ifdef OPTIMIZED_READONLY_ZIP_ENTRY
 // this is the record about the file in the Zip file.
@@ -360,8 +367,8 @@ struct FileEntry
 	enum {INVALID_DATA_OFFSET = 0xFFFFFFFF};
 
 	ZipFile::DataDescriptor desc;
-	uint32                  nFileDataOffset;   // offset of the packed info inside the file; NOTE: this can be INVALID_DATA_OFFSET, if not calculated yet!
-	uint32                  nFileHeaderOffset; // offset of the local file header
+	uint64                  nFileDataOffset;   // offset of the packed info inside the file; NOTE: this can be INVALID_DATA_OFFSET, if not calculated yet!
+	uint64                  nFileHeaderOffset; // offset of the local file header
 	uint32                  nNameOffset;       // offset of the file name in the name pool for the directory
 
 	uint16                  nMethod;    // the method of compression (0 if no compression/store)
@@ -375,10 +382,15 @@ struct FileEntry
 
 	// the offset to the start of the next file's header - this
 	// can be used to calculate the available space in zip file
-	uint32 nEOFOffset;
+	uint64 nEOFOffset;
+
+	//files size - only for Zip64 (in DataDescriptor for Zip32)
+	uint64 lSizeCompressed;   // compressed size                 8 bytes
+	uint64 lSizeUncompressed; // Original uncompressed file size 8 bytes
 
 	FileEntry() : nFileHeaderOffset(INVALID_DATA_OFFSET){}
 	FileEntry(const ZipFile::CDRFileHeader& header, const SExtraZipFileData& extra);
+	FileEntry(const ZipFile::CDRFileHeader& header, const SExtraZipFileDataZip64& extra, const ZipFile::LocalFileHeader& localFileHeader);
 
 	bool IsInitialized()
 	{

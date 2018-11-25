@@ -457,7 +457,7 @@ uint32 ZipDir::CZipFile::GetFileDataOffset() const
 		if (InPakFileOrAsset())
 		{
 			assert(m_pPakFileEntry->nFileDataOffset != ZipDir::FileEntry::INVALID_DATA_OFFSET);
-			return m_pPakFileEntry->nFileDataOffset + m_nAssetOffset;
+			return (uint32)m_pPakFileEntry->nFileDataOffset + m_nAssetOffset; //HACK uint32 cast - we dont use android anyway
 		}
 		return m_nAssetOffset;
 	}
@@ -473,7 +473,7 @@ uint32 ZipDir::CZipFile::GetFileDataOffset() const
 ZipDir::FileEntry::FileEntry(const CDRFileHeader& header, const SExtraZipFileData& extra)
 {
 	this->desc = header.desc;
-	this->nFileHeaderOffset = header.lLocalHeaderOffset;
+	this->nFileHeaderOffset = (uint64)header.lLocalHeaderOffset;
 	//this->nFileDataOffset   = INVALID_DATA_OFFSET; // we don't know yet
 	this->nMethod = header.nMethod;
 	this->nNameOffset = 0;       // we don't know yet
@@ -483,7 +483,29 @@ ZipDir::FileEntry::FileEntry(const CDRFileHeader& header, const SExtraZipFileDat
 	this->nNTFS_LastModifyTime_Hi = extra.nLastModifyTime_Hi;
 
 	// make an estimation (at least this offset should be there), but we don't actually know yet
-	this->nFileDataOffset = header.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength;
+	this->nFileDataOffset = (uint64)header.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength;
+	this->nEOFOffset = header.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength + header.desc.lSizeCompressed;
+}
+ZipDir::FileEntry::FileEntry(const CDRFileHeader& header, const SExtraZipFileDataZip64& extra, const LocalFileHeader& localFileHeader)
+{
+	this->desc = DataDescriptor(); // for Zip64 in CDR file header crc32 = 0, sizes = -1 | crc32 stored in local file header
+	this->desc.lCRC32 = localFileHeader.desc.lCRC32;
+	this->desc.lSizeUncompressed = (uint32)extra.lOriginalSize; // UNSAFE! cast - temp solution since we dont expect files bigger that 2GB in data.p4k
+	this->desc.lSizeCompressed = (uint32)extra.lCompressedSize;
+	this->nFileHeaderOffset = (uint64)extra.lLocalHeaderOffset;
+	//this->nFileDataOffset   = INVALID_DATA_OFFSET; // we don't know yet
+	this->nMethod = header.nMethod;
+	this->nNameOffset = 0;       // we don't know yet
+	this->nLastModTime = header.nLastModTime;
+	this->nLastModDate = header.nLastModDate;
+	this->nNTFS_LastModifyTime_Lo = 0;
+	this->nNTFS_LastModifyTime_Hi = 0;
+
+	this->lSizeCompressed = extra.lCompressedSize;
+	this->lSizeUncompressed = extra.lOriginalSize;
+
+	// make an estimation (at least this offset should be there), but we don't actually know yet
+	this->nFileDataOffset = (uint64)header.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength;
 	this->nEOFOffset = header.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength + header.desc.lSizeCompressed;
 }
 #endif //#ifndef OPTIMIZED_READONLY_ZIP_ENTRY

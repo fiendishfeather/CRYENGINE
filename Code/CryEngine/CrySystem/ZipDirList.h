@@ -114,12 +114,12 @@ struct FileEntryFileOffsetOrder
 class FileEntryList : public std::set<FileEntry*, FileEntryFileOffsetOrder>
 {
 public:
-	FileEntryList(class FileEntryTree* pTree, unsigned lCDROffset);
+	FileEntryList(class FileEntryTree* pTree, uint64 lCDROffset);
 	// updates each file entry's info about the next file entry
 	void RefreshEOFOffsets();
 protected:
 	void     Add(class FileEntryTree* pTree);
-	unsigned m_lCDROffset;
+	uint64 m_lCDROffset;
 };
 
 }

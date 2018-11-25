@@ -86,6 +86,7 @@ protected:
 	// the actual file lies
 	// This function can actually modify strFilePath variable, make sure you use a copy of the real path.
 	void AddFileEntry(char* strFilePath, const ZipFile::CDRFileHeader* pFileHeader, const SExtraZipFileData& extra); // throw (ErrorEnum);
+	void AddFileEntry(char* strFilePath, const ZipFile::CDRFileHeader* pFileHeader, const SExtraZipFileDataZip64& extra); // throw (ErrorEnum);
 
 	// extracts the file path from the file header with subsequent information
 	// may, or may not, put all letters to lower-case (depending on whether the system is to be case-sensitive or not)
@@ -111,12 +112,12 @@ protected:
 
 	// initializes the actual data offset in the file in the fileEntry structure
 	// searches to the local file header, reads it and calculates the actual offset in the file
-	void InitDataOffset(FileEntry& fileEntry, const ZipFile::CDRFileHeader* pFileHeader);
+	void InitDataOffset(FileEntry& fileEntry, const ZipFile::CDRFileHeader* pFileHeader, const SExtraZipFileDataZip64* pExtra = 0);
 
 	// seeks in the file relative to the starting position
-	void  Seek(uint32 nPos, int nOrigin = SEEK_SET);   // throw
+	void  Seek(int64 nPos, int nOrigin = SEEK_SET);   // throw
 	int64 Tell();                                      // throw
-	bool  Read(void* pDest, unsigned nSize);           // throw
+	bool  Read(void* pDest, uint64 nSize);           // throw
 	bool  ReadHeaderData(void* pDest, unsigned nSize); // throw
 
 	bool  DecryptKeysTable();
@@ -128,7 +129,12 @@ protected:
 
 	InitMethodEnum  m_nInitMethod;
 	unsigned        m_nFlags;
-	ZipFile::CDREnd m_CDREnd;
+
+	ZipFile::CDREnd     m_CDREnd;
+	ZipFile::CDREnd64   m_CDREnd64;
+	ZipFile::CDREndData m_CDREndData;
+
+	bool m_bIsZip64 = false;
 
 	size_t          m_nZipFileSize;
 
@@ -136,7 +142,7 @@ protected:
 	// to allocate/free this instance and for decompression operations
 	CMTSafeHeap* m_pHeap;
 
-	unsigned     m_nCDREndPos; // position of the CDR End in the file
+	uint64     m_nCDREndPos; // position of the CDR End in the file
 
 	// Map: Relative file path => file entry info
 	typedef std::map<string, ZipDir::FileEntry> FileEntryMap;

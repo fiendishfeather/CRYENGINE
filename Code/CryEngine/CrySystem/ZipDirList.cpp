@@ -75,7 +75,7 @@ size_t ZipDir::FileRecordList::MakeZipCDR(uint32 lCDROffset, void* pBuffer, bool
 		h.nDiskNumberStart = 0;
 		h.nAttrInternal = 0;
 		h.lAttrExternal = 0;
-		h.lLocalHeaderOffset = it->pFileEntry->nFileHeaderOffset;
+		h.lLocalHeaderOffset = (uint32)it->pFileEntry->nFileHeaderOffset; // cast for now - we dont expect to update data.p4k
 
 		memcpy(pCur, it->strPath.c_str(), it->strPath.length());
 		pCur += it->strPath.length();
@@ -99,7 +99,7 @@ size_t ZipDir::FileRecordList::MakeZipCDR(uint32 lCDROffset, void* pBuffer, bool
 #endif
 }
 
-ZipDir::FileEntryList::FileEntryList(FileEntryTree* pTree, unsigned lCDROffset) :
+ZipDir::FileEntryList::FileEntryList(FileEntryTree* pTree, uint64 lCDROffset) :
 	m_lCDROffset(lCDROffset)
 {
 	Add(pTree);
@@ -127,7 +127,7 @@ void ZipDir::FileEntryList::RefreshEOFOffsets()
 			(*it)->nEOFOffset = (*itNext)->nFileHeaderOffset;
 		}
 		// it is the last one..
-		(*it)->nEOFOffset = m_lCDROffset;
+		(*it)->nEOFOffset = (uint32)m_lCDROffset; //casting for now
 	}
 #endif
 }

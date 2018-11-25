@@ -206,14 +206,15 @@ ZipDir::ErrorEnum ZipDir::CacheRW::UpdateFile(const char* szRelativePathSrc, voi
 	m_nFlags |= FLAGS_CDR_DIRTY;
 
 	// the new CDR position, if the operation completes successfully
-	unsigned lNewCDROffset = m_lCDROffset;
+	unsigned lNewCDROffset = (unsigned)m_lCDROffset; //casting for now - we wont update data.p4k
 
 	if (pFileEntry->IsInitialized())
 	{
 		// this file entry is already allocated in CDR
 
 		// check if the new compressed data fits into the old place
-		unsigned nFreeSpace = pFileEntry->nEOFOffset - pFileEntry->nFileHeaderOffset - (unsigned)sizeof(ZipFile::LocalFileHeader) - (unsigned)strlen(szRelativePath);
+		// cast for now - we dont expect to update data.p4k
+		unsigned nFreeSpace = (uint32)(pFileEntry->nEOFOffset - pFileEntry->nFileHeaderOffset - (unsigned)sizeof(ZipFile::LocalFileHeader) - (unsigned)strlen(szRelativePath));
 
 		if (nFreeSpace != nSizeCompressed)
 			m_nFlags |= FLAGS_UNCOMPACTED;
@@ -230,7 +231,7 @@ ZipDir::ErrorEnum ZipDir::CacheRW::UpdateFile(const char* szRelativePathSrc, voi
 			// we need to write the file anew - in place of current CDR
 			pFileEntry->nFileHeaderOffset = m_lCDROffset;
 			ErrorEnum e = WriteLocalHeader(m_pFile, pFileEntry, szRelativePath, m_encryptedHeaders == HEADERS_ENCRYPTED_TEA);
-			lNewCDROffset = pFileEntry->nEOFOffset;
+			lNewCDROffset = (uint32)pFileEntry->nEOFOffset; // cast for now - we dont expect to update data.p4k
 			if (e != ZD_ERROR_SUCCESS)
 				return e;
 		}
@@ -242,7 +243,7 @@ ZipDir::ErrorEnum ZipDir::CacheRW::UpdateFile(const char* szRelativePathSrc, voi
 		if (e != ZD_ERROR_SUCCESS)
 			return e;
 
-		lNewCDROffset = pFileEntry->nFileDataOffset + nSizeCompressed;
+		lNewCDROffset = (uint32)(pFileEntry->nFileDataOffset + nSizeCompressed); // cast for now - we dont expect to update data.p4k
 
 		m_nFlags |= FLAGS_CDR_DIRTY;
 	}
@@ -316,11 +317,12 @@ ZipDir::ErrorEnum ZipDir::CacheRW::StartContinuousFileUpdate(const char* szRelat
 	m_nFlags |= FLAGS_CDR_DIRTY;
 
 	// the new CDR position, if the operation completes successfully
-	unsigned lNewCDROffset = m_lCDROffset;
+	unsigned lNewCDROffset = (unsigned)m_lCDROffset; //casting for now - we wont update data.p4k
 	if (pFileEntry->IsInitialized())
 	{
 		// check if the new compressed data fits into the old place
-		unsigned nFreeSpace = pFileEntry->nEOFOffset - pFileEntry->nFileHeaderOffset - (unsigned)sizeof(ZipFile::LocalFileHeader) - (unsigned)strlen(szRelativePath);
+		// cast for now - we dont expect to update data.p4k
+		unsigned nFreeSpace = (uint32)(pFileEntry->nEOFOffset - pFileEntry->nFileHeaderOffset - (unsigned)sizeof(ZipFile::LocalFileHeader) - (unsigned)strlen(szRelativePath));
 
 		if (nFreeSpace != nSize)
 			m_nFlags |= FLAGS_UNCOMPACTED;
@@ -335,21 +337,21 @@ ZipDir::ErrorEnum ZipDir::CacheRW::StartContinuousFileUpdate(const char* szRelat
 		else
 		{
 			// we need to write the file anew - in place of current CDR
-			pFileEntry->nFileHeaderOffset = m_lCDROffset;
+			pFileEntry->nFileHeaderOffset = (unsigned)m_lCDROffset; //casting for now - we wont update data.p4k
 			ErrorEnum e = WriteLocalHeader(m_pFile, pFileEntry, szRelativePath, m_encryptedHeaders == HEADERS_ENCRYPTED_TEA);
-			lNewCDROffset = pFileEntry->nEOFOffset;
+			lNewCDROffset = (uint32)pFileEntry->nEOFOffset; // cast for now - we dont expect to update data.p4k
 			if (e != ZD_ERROR_SUCCESS)
 				return e;
 		}
 	}
 	else
 	{
-		pFileEntry->nFileHeaderOffset = m_lCDROffset;
+		pFileEntry->nFileHeaderOffset = (unsigned)m_lCDROffset; //casting for now - we wont update data.p4k
 		ErrorEnum e = WriteLocalHeader(m_pFile, pFileEntry, szRelativePath, m_encryptedHeaders == HEADERS_ENCRYPTED_TEA);
 		if (e != ZD_ERROR_SUCCESS)
 			return e;
 
-		lNewCDROffset = pFileEntry->nFileDataOffset + nSize;
+		lNewCDROffset = (uint32)(pFileEntry->nFileDataOffset + nSize); // cast for now - we dont expect to update data.p4k
 
 		m_nFlags |= FLAGS_CDR_DIRTY;
 	}
@@ -400,7 +402,7 @@ ZipDir::ErrorEnum ZipDir::CacheRW::UpdateFileContinuousSegment(const char* szRel
 	m_nFlags |= FLAGS_CDR_DIRTY;
 
 	// this file entry is already allocated in CDR
-	unsigned lSegmentOffset = pFileEntry->nEOFOffset;
+	unsigned lSegmentOffset = (uint32)pFileEntry->nEOFOffset; // cast for now - we dont expect to update data.p4k
 
 	#if CRY_PLATFORM_WINDOWS
 	if (_fseeki64(m_pFile, (__int64)pFileEntry->nFileHeaderOffset, SEEK_SET) != 0)
@@ -417,7 +419,7 @@ ZipDir::ErrorEnum ZipDir::CacheRW::UpdateFileContinuousSegment(const char* szRel
 		return e;
 
 	if (nOverwriteSeekPos != 0xffffffff)
-		lSegmentOffset = pFileEntry->nFileDataOffset + nOverwriteSeekPos;
+		lSegmentOffset = (uint32)(pFileEntry->nFileDataOffset + nOverwriteSeekPos); // cast for now - we dont expect to update data.p4k
 
 	// now we have the fresh local header and data offset
 	#if CRY_PLATFORM_WINDOWS
@@ -747,7 +749,7 @@ bool ZipDir::CacheRW::WriteCDR(FILE* fTarget)
 	//arrFiles.SortByFileOffset();
 	size_t nSizeCDR = arrFiles.GetStats().nSizeCDR;
 	void* pCDR = m_pHeap->TempAlloc(nSizeCDR, "ZipDir::CacheRW::WriteCDR");
-	size_t nSizeCDRSerialized = arrFiles.MakeZipCDR(m_lCDROffset, pCDR, m_encryptedHeaders == HEADERS_ENCRYPTED_TEA);
+	size_t nSizeCDRSerialized = arrFiles.MakeZipCDR((uint32)m_lCDROffset, pCDR, m_encryptedHeaders == HEADERS_ENCRYPTED_TEA);//(unsigned)m_lCDROffset casting for now - we wont update data.p4k
 	assert(nSizeCDRSerialized == nSizeCDR);
 	if (m_encryptedHeaders == HEADERS_ENCRYPTED_TEA)
 	{
@@ -936,7 +938,7 @@ bool ZipDir::CacheRW::RelinkZip(FILE* fTmp)
 	if (!WriteZipFiles(queFiles, fTmp))
 		return false;
 
-	uint32 lOldCDROffset = m_lCDROffset;
+	uint32 lOldCDROffset = (unsigned)m_lCDROffset; //casting for now - we wont update data.p4k
 	// the file data has now been written out. Now write the CDR
 	#if CRY_PLATFORM_WINDOWS
 	m_lCDROffset = (uint32)_ftelli64(fTmp);

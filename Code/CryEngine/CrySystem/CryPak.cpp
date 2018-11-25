@@ -1137,7 +1137,7 @@ bool CCryPak::AdjustAliases(char* dst)
 extern char* fopenwrapper_basedir;
 #endif
 
-void CCryPak::GetCachedPakCDROffsetSize(const char* szName, uint32& offset, uint32& size)
+void CCryPak::GetCachedPakCDROffsetSize(const char* szName, uint64& offset, uint64& size)
 {
 	offset = 0;     // play it safe
 	size = 0;
@@ -3882,12 +3882,15 @@ bool CCryPak::ComputeMD5(const char* szPath, unsigned char* md5, uint32 nFileOpe
 
 int CCryPak::ComputeCachedPakCDR_CRC(const char* filename, bool useCryFile /*=true*/, IMemoryBlock* pData /*=NULL*/)
 {
-	uint32 offset = 0;
-	uint32 size = 0;
+	uint64 offset = 0;
+	uint64 sizeTemp = 0;
+	uint32 size = 0; 
 	int retval = 0;
 
 	//get Central Directory Record position and length
-	gEnv->pCryPak->GetCachedPakCDROffsetSize(filename, offset, size);
+	gEnv->pCryPak->GetCachedPakCDROffsetSize(filename, offset, sizeTemp);
+	
+	size = (uint32)sizeTemp; //casting to 32bit for now - supports a lot of files already anyway
 
 	CCryFile file;
 	FILE* fp;

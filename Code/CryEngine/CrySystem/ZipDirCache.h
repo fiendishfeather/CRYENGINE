@@ -59,7 +59,7 @@ struct Cache
 	ErrorEnum Refresh(FileEntry* pFileEntry);
 
 	// Return FileEntity data offset inside zip file.
-	uint32      GetFileDataOffset(FileEntry* pFileEntry);
+	uint64      GetFileDataOffset(FileEntry* pFileEntry);
 
 	const char* GetFileEntryName(FileEntry* pFileEntry);
 
@@ -112,8 +112,8 @@ struct Cache
 	uint64 GetPakFileOffsetOnMedia()           { return m_nPakFileOffsetOnMedia; }
 
 	//offsets for cdr data in a .pak file for anti-cheat purposes
-	void SetCDROffsetSize(uint32 offset, uint32 size)   { m_cdrOffset = offset; m_cdrSize = size; }
-	void GetCDROffsetSize(uint32& offset, uint32& size) { offset = m_cdrOffset; size = m_cdrSize; }
+	void SetCDROffsetSize(uint64 offset, uint64 size)   { m_cdrOffset = offset; m_cdrSize = size; }
+	void GetCDROffsetSize(uint64& offset, uint64& size) { offset = m_cdrOffset; size = m_cdrSize; }
 
 	friend class CacheFactory; // the factory class creates instances of this class
 	friend class CacheRW;      // the Read-Write 2-way cache can modify this cache directly during write operations
@@ -150,8 +150,8 @@ protected:
 	// the offset to the path/name of the zip file relative to (char*)(this+1) pointer in bytes
 	size_t m_nZipPathOffset;
 
-	uint32 m_cdrOffset;
-	uint32 m_cdrSize;
+	uint64 m_cdrOffset;
+	uint64 m_cdrSize;
 
 	// Zip Headers
 	ZipFile::CryCustomEncryptionHeader m_headerEncryption;

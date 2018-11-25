@@ -286,14 +286,14 @@ bool ZipDir::CacheFactory::ReadCacheRW(CacheRW& rwCache)
 
 	// since it's open for R/W, we need to know exactly how much space
 	// we have for each file to use the gaps efficiently
-	FileEntryList Adjuster(&m_treeFileEntries, m_CDREnd.lCDROffset);
+	FileEntryList Adjuster(&m_treeFileEntries, m_CDREndData.lCDROffset);
 	Adjuster.RefreshEOFOffsets();
 
 	m_treeFileEntries.Swap(rwCache.m_treeDir);
 	m_CDR_buffer.swap(rwCache.m_CDR_buffer);   // CDR Buffer contain actually the string pool for the tree directory.
 
 	// very important: we need this offset to be able to add to the zip file
-	rwCache.m_lCDROffset = m_CDREnd.lCDROffset;
+	rwCache.m_lCDROffset = m_CDREndData.lCDROffset;
 
 	rwCache.m_encryptedHeaders = m_encryptedHeaders;
 	rwCache.m_signedHeaders = m_signedHeaders;
@@ -321,18 +321,18 @@ bool ZipDir::CacheFactory::Prepare()
 
 	//Earlier pak file encryption techniques stored the encryption type in the disk number of the CDREnd.
 	//This works, but can't be used by the more recent techniques that require signed paks to be readable by 7-Zip during dev.
-	ZipFile::EHeaderEncryptionType headerEnc = (ZipFile::EHeaderEncryptionType)((m_CDREnd.nDisk & 0xC000) >> 14);
+	ZipFile::EHeaderEncryptionType headerEnc = (ZipFile::EHeaderEncryptionType)((m_CDREndData.nDisk & 0xC000) >> 14);
 	if (headerEnc == HEADERS_ENCRYPTED_TEA || headerEnc == HEADERS_ENCRYPTED_STREAMCIPHER)
 	{
 		m_encryptedHeaders = headerEnc;
 	}
-	m_CDREnd.nDisk = m_CDREnd.nDisk & 0x3fff;
+	m_CDREndData.nDisk = m_CDREndData.nDisk & 0x3fff;
 
 	//Pak may be encrypted with CryCustom technique and/or signed. Being signed is compatible (in principle) with the earlier encryption methods.
 	//The information for this exists in some custom headers at the end of the archive (in the comment section)
-	if (m_CDREnd.nCommentLength >= sizeof(m_headerExtended))
+	if (m_CDREndData.nCommentLength >= sizeof(m_headerExtended))
 	{
-		Seek(m_CDREnd.lCDROffset + m_CDREnd.lCDRSize + sizeof(CDREnd));
+		Seek(m_CDREndData.lCDROffset + m_CDREndData.lCDRSize + sizeof(CDREnd));
 		Read(&m_headerExtended, sizeof(m_headerExtended));
 		m_headerExtended.nEncryption = SwapEndianValue(m_headerExtended.nEncryption);
 		m_headerExtended.nHeaderSize = SwapEndianValue(m_headerExtended.nHeaderSize);
@@ -388,7 +388,7 @@ bool ZipDir::CacheFactory::Prepare()
 			return false;
 		}
 
-		if (m_CDREnd.nCommentLength == expectedCommentLength)
+		if (m_CDREndData.nCommentLength == expectedCommentLength)
 		{
 			if (m_signedHeaders == HEADERS_CDR_SIGNED)
 			{
@@ -473,9 +473,9 @@ bool ZipDir::CacheFactory::Prepare()
 #endif
 
 	// we don't support multivolume archives
-	if (m_CDREnd.nDisk != 0
-	    || m_CDREnd.nCDRStartDisk != 0
-	    || m_CDREnd.numEntriesOnDisk != m_CDREnd.numEntriesTotal)
+	if (m_CDREndData.nDisk != 0
+	    || m_CDREndData.nCDRStartDisk != 0
+	    || m_CDREndData.numEntriesOnDisk != m_CDREndData.numEntriesTotal)
 	{
 		THROW_ZIPDIR_ERROR(ZD_ERROR_UNSUPPORTED, "Multivolume archive detected. Current version of ZipDir does not support multivolume archives");
 		return false;
@@ -483,9 +483,9 @@ bool ZipDir::CacheFactory::Prepare()
 
 	// if the central directory offset or size are out of range,
 	// the CDREnd record is probably corrupt
-	if (m_CDREnd.lCDROffset > m_nCDREndPos
-	    || m_CDREnd.lCDRSize > m_nCDREndPos
-	    || m_CDREnd.lCDROffset + m_CDREnd.lCDRSize > m_nCDREndPos)
+	if (m_CDREndData.lCDROffset > m_nCDREndPos
+	    || m_CDREndData.lCDRSize > m_nCDREndPos
+	    || m_CDREndData.lCDROffset + m_CDREndData.lCDRSize > m_nCDREndPos)
 	{
 		THROW_ZIPDIR_ERROR(ZD_ERROR_DATA_IS_CORRUPT, "The central directory offset or size are out of range, the pak is probably corrupt, try to repare or delete the file");
 		return false;
@@ -554,7 +554,7 @@ ZipDir::CachePtr ZipDir::CacheFactory::MakeCache(const char* szFile)
 	pCacheInstance->SetPakFileOffsetOnMedia(GenPakFileOffsetOnMedia(szFile));
 #endif
 	pCacheInstance->SetZipFileSize(m_nZipFileSize);
-	pCacheInstance->SetCDROffsetSize(m_CDREnd.lCDROffset, m_CDREnd.lCDRSize);
+	pCacheInstance->SetCDROffsetSize(m_CDREndData.lCDROffset, m_CDREndData.lCDRSize);
 
 	CachePtr cache = pCacheInstance;
 
@@ -614,6 +614,8 @@ void ZipDir::CacheFactory::Clear()
 
 	m_nCDREndPos = 0;
 	memset(&m_CDREnd, 0, sizeof(m_CDREnd));
+	memset(&m_CDREnd64, 0, sizeof(m_CDREnd64));
+	memset(&m_CDREndData, 0, sizeof(m_CDREndData));
 	m_mapFileEntries.clear();
 	m_treeFileEntries.Clear();
 	m_encryptedHeaders = HEADERS_NOT_ENCRYPTED;
@@ -630,14 +632,17 @@ bool ZipDir::CacheFactory::FindCDREnd()
 	//We cannot create it on the stack for RSX memory usage as we are not permitted to access it via SPU
 	std::vector<char> pReservedBuffer(g_nCDRSearchWindowSize + sizeof(CDREnd) - 1);
 
+	std::vector<char> pReservedBufferCDREnd(sizeof(CDREnd64));
+	std::vector<char> pReservedBufferCDREndLoc(sizeof(CDREnd64Locator));
+
 	Seek(0, SEEK_END);
 	int64 nFileSize = Tell();
 
 	//There is a 2GB pak file limit
-	if (nFileSize > 2147483648ull)
-	{
-		THROW_ZIPDIR_FATAL_ERROR(ZD_ERROR_ARCHIVE_TOO_LARGE, "The file is too large. Can't open a pak file that is greater than 2GB in size.");
-	}
+	//if (nFileSize > 2147483648ull)
+	//{
+	//	THROW_ZIPDIR_FATAL_ERROR(ZD_ERROR_ARCHIVE_TOO_LARGE, "The file is too large. Can't open a pak file that is greater than 2GB in size.");
+	//}
 
 	m_nZipFileSize = (size_t)nFileSize;
 
@@ -648,16 +653,20 @@ bool ZipDir::CacheFactory::FindCDREnd()
 	}
 
 	// this will point to the place where the buffer was loaded
-	unsigned int nOldBufPos = (unsigned int)nFileSize;
+	int64 nOldBufPos = (int64)nFileSize;
 	// start scanning well before the end of the file to avoid reading beyond the end
 
-	unsigned int nScanPos = nOldBufPos - sizeof(CDREnd);
+	int64 nScanPos = nOldBufPos - sizeof(CDREnd);
 
 	m_CDREnd.lSignature = 0; // invalid signature as the flag of not-found CDR End structure
 	while (true)
 	{
-		unsigned int nNewBufPos;             // the new buf pos
+		int64 nNewBufPos;             // the new buf pos
 		char* pWindow = &pReservedBuffer[0]; // the window pointer into which data will be read (takes into account the possible tail-of-CDREnd)
+
+		char* pBufferCDREnd = &pReservedBufferCDREnd[0];
+		char* pBufferCDREndLoc = &pReservedBufferCDREndLoc[0];
+
 		if (nOldBufPos <= g_nCDRSearchWindowSize)
 		{
 			// the old buffer position doesn't let us read the full search window size
@@ -678,9 +687,9 @@ bool ZipDir::CacheFactory::FindCDREnd()
 		if (nFileSize > (sizeof(CDREnd) + 0xFFFF))
 		{
 			// if the new buffer pos is beyond 64k limit for the comment size
-			if (nNewBufPos < (unsigned int)(nFileSize - sizeof(CDREnd) - 0xFFFF))
+			if (nNewBufPos < (int64)(nFileSize - sizeof(CDREnd) - 0xFFFF))
 			{
-				nNewBufPos = (unsigned int)(nFileSize - sizeof(CDREnd) - 0xFFFF);
+				nNewBufPos = (int64)(nFileSize - sizeof(CDREnd) - 0xFFFF);
 			}
 		}
 
@@ -693,19 +702,32 @@ bool ZipDir::CacheFactory::FindCDREnd()
 
 		// seek to the start of the new window and read it
 		Seek(nNewBufPos);
-		Read(pWindow, nOldBufPos - nNewBufPos);
+		Read(pWindow, (uint64)(nOldBufPos - nNewBufPos));
 
 		while (nScanPos >= nNewBufPos)
 		{
 			CDREnd* pEnd = (CDREnd*)(pWindow + nScanPos - nNewBufPos);
 			if (SwapEndianValue(pEnd->lSignature) == pEnd->SIGNATURE)
 			{
-				if (SwapEndianValue(pEnd->nCommentLength) == nFileSize - nScanPos - sizeof(CDREnd))
+				//SC data p4k file has garbage after zip file comment
+				//so only check if comment length is after eof
+				if (SwapEndianValue(pEnd->nCommentLength) <= nFileSize - nScanPos - sizeof(CDREnd))
 				{
 					// the comment length is exactly what we expected
 					m_CDREnd = *pEnd;
 					SwapEndian(m_CDREnd);
 					m_nCDREndPos = nScanPos;
+
+					m_CDREndData = CDREndData();
+					m_CDREndData.lSignature = m_CDREnd.lSignature;
+					m_CDREndData.nDisk = m_CDREnd.nDisk;
+					m_CDREndData.nCDRStartDisk = m_CDREnd.nCDRStartDisk;
+					m_CDREndData.numEntriesOnDisk = m_CDREnd.numEntriesOnDisk;
+					m_CDREndData.numEntriesTotal = m_CDREnd.numEntriesTotal;
+					m_CDREndData.lCDRSize = m_CDREnd.lCDRSize;
+					m_CDREndData.lCDROffset = m_CDREnd.lCDROffset;
+					m_CDREndData.nCommentLength = m_CDREnd.nCommentLength;
+
 					break;
 				}
 				else
@@ -720,7 +742,49 @@ bool ZipDir::CacheFactory::FindCDREnd()
 		}
 
 		if (m_CDREnd.lSignature == m_CDREnd.SIGNATURE)
+		{
+			//check if zip64
+			//zip64 cdr end locator should be right above cdr end 
+
+			Seek(nScanPos - sizeof(CDREnd64Locator));
+			Read(pBufferCDREndLoc, sizeof(CDREnd64Locator));
+
+			CDREnd64Locator* pEnd64Loc = (CDREnd64Locator*)(pBufferCDREndLoc);
+
+			if (SwapEndianValue(pEnd64Loc->lSignature) == pEnd64Loc->SIGNATURE)
+			{  
+				Seek(SwapEndianValue(pEnd64Loc->lCDREnd64Offset));
+				Read(pBufferCDREnd,sizeof(CDREnd64));
+
+				CDREnd64* pEnd64 = (CDREnd64*)(pBufferCDREnd);
+
+				if (SwapEndianValue(pEnd64->lSignature) == pEnd64->SIGNATURE)
+				{
+					m_bIsZip64 = true;
+
+					m_CDREnd64 = *pEnd64;
+					SwapEndian(m_CDREnd64);
+
+					m_CDREndData = CDREndData();
+					m_CDREndData.lSignature = m_CDREnd64.lSignature;
+					m_CDREndData.nDisk = m_CDREnd64.nDisk;
+					m_CDREndData.nCDRStartDisk = m_CDREnd64.nCDRStartDisk;
+					m_CDREndData.numEntriesOnDisk = (uint32)m_CDREnd64.numEntriesOnDisk;
+					m_CDREndData.numEntriesTotal = (uint32)m_CDREnd64.numEntriesTotal;
+					m_CDREndData.lCDRSize = (uint32)m_CDREnd64.lCDRSize;
+					m_CDREndData.lCDROffset = m_CDREnd64.lCDROffset;
+					m_CDREndData.nCommentLength = 0;
+
+					return true;
+				}
+			}
+
+			if (m_CDREnd.nDisk == -1)
+			{
+				return false;
+			}
 			return true; // we've found it
+		}
 
 		nOldBufPos = nNewBufPos;
 		memmove(&pReservedBuffer[g_nCDRSearchWindowSize], pWindow, sizeof(CDREnd) - 1);
@@ -737,14 +801,14 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 {
 	LOADING_TIME_PROFILE_SECTION;
 
-	Seek(m_CDREnd.lCDROffset);
+	Seek(m_CDREndData.lCDROffset);
 
-	if (m_CDREnd.lCDRSize == 0)
+	if (m_CDREndData.lCDRSize == 0)
 		return true;
 
 	DynArray<char>& pBuffer = m_CDR_buffer; // Use persistent buffer.
 
-	pBuffer.resize(m_CDREnd.lCDRSize + 16); // Allocate some more because we use this memory as a strings pool.
+	pBuffer.resize(m_CDREndData.lCDRSize + 16); // Allocate some more because we use this memory as a strings pool.
 
 	if (pBuffer.empty()) // couldn't allocate enough memory for temporary copy of CDR
 	{
@@ -752,7 +816,7 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 		return false;
 	}
 
-	if (!ReadHeaderData(&pBuffer[0], m_CDREnd.lCDRSize))
+	if (!ReadHeaderData(&pBuffer[0], m_CDREndData.lCDRSize))
 	{
 		THROW_ZIPDIR_ERROR(ZD_ERROR_CORRUPTED_DATA, "Archive contains corrupted CDR.");
 		return false;
@@ -761,12 +825,12 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 	if (m_bBuildOptimizedFileEntry)
 	{
 		m_optimizedFileEntries.clear();
-		m_optimizedFileEntries.reserve(m_CDREnd.numEntriesTotal);
+		m_optimizedFileEntries.reserve(m_CDREndData.numEntriesTotal);
 	}
 
 	// now we've read the complete CDR - parse it.
 	CDRFileHeader* pFile = (CDRFileHeader*)(&pBuffer[0]);
-	const char* pEndOfData = &pBuffer[0] + m_CDREnd.lCDRSize, * pFileName;
+	const char* pEndOfData = &pBuffer[0] + m_CDREndData.lCDRSize, * pFileName;
 
 	while ((pFileName = (const char*)(pFile + 1)) <= pEndOfData)
 	{
@@ -774,7 +838,7 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 		pFile->lSignature = 0; // Force signature to always be 0 (First byte of signature maybe a zero termination of the previous file filename).
 
 		SwapEndian(*pFile);
-		if ((pFile->nVersionNeeded & 0xFF) > 20)
+		if (((pFile->nVersionNeeded & 0xFF) > 20) && ((pFile->nVersionNeeded & 0xFF) != 45))
 		{
 			THROW_ZIPDIR_ERROR(ZD_ERROR_UNSUPPORTED, "Cannot read the archive file (nVersionNeeded > 20).");
 			return false;
@@ -794,6 +858,7 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 		// Analyze advanced section.
 		//////////////////////////////////////////////////////////////////////////
 		SExtraZipFileData extra;
+		SExtraZipFileDataZip64 extraZip64;
 		const char* pExtraField = (pFileName + pFile->nFileNameLength);
 		const char* pExtraEnd = pExtraField + pFile->nExtraFieldLength;
 		while (pExtraField < pExtraEnd)
@@ -808,6 +873,11 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 					memcpy(&extra, pAttrData + sizeof(ExtraNTFSHeader), sizeof(SExtraZipFileData));
 					//					uint64 accTime = *(uint64*)(pAttrData + sizeof(ExtraNTFSHeader) + 8);
 					//					uint64 crtTime = *(uint64*)(pAttrData + sizeof(ExtraNTFSHeader) + 16);
+				}
+				break;
+			case EXTRA_ZIP64:
+				{
+					memcpy(&extraZip64, pAttrData, sizeof(SExtraZipFileData));
 				}
 				break;
 			}
@@ -834,7 +904,8 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 #endif
 			}
 			str[pFile->nFileNameLength] = 0; // Not standart!, may overwrite signature of the next memory record data in zip.
-			AddFileEntry(str, pFile, extra);
+			if ((pFile->nVersionNeeded & 0xFF) <= 20)AddFileEntry(str, pFile, extra);
+			if ((pFile->nVersionNeeded & 0xFF) == 45)AddFileEntry(str, pFile, extraZip64);
 		}
 
 		// move to the next file
@@ -850,7 +921,7 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 // and determine where the actual file lies
 void ZipDir::CacheFactory::AddFileEntry(char* strFilePath, const ZipFile::CDRFileHeader* pFileHeader, const SExtraZipFileData& extra)
 {
-	if (pFileHeader->lLocalHeaderOffset > m_CDREnd.lCDROffset)
+	if (pFileHeader->lLocalHeaderOffset > m_CDREndData.lCDROffset)
 	{
 		THROW_ZIPDIR_ERROR(ZD_ERROR_CDR_IS_CORRUPT, "Central Directory contains file descriptors pointing outside the archive file boundaries. The archive file is either truncated or damaged. Please try to repair the file");  // the file offset is beyond the CDR: impossible
 		return;
@@ -892,11 +963,63 @@ void ZipDir::CacheFactory::AddFileEntry(char* strFilePath, const ZipFile::CDRFil
 		m_optimizedFileEntries.push_back(fileEntry);
 	}
 }
+void ZipDir::CacheFactory::AddFileEntry(char* strFilePath, const ZipFile::CDRFileHeader* pFileHeader, const SExtraZipFileDataZip64& extra)
+{
+	if (pFileHeader->lLocalHeaderOffset > m_CDREndData.lCDROffset)
+	{
+		THROW_ZIPDIR_ERROR(ZD_ERROR_CDR_IS_CORRUPT, "Central Directory contains file descriptors pointing outside the archive file boundaries. The archive file is either truncated or damaged. Please try to repair the file");  // the file offset is beyond the CDR: impossible
+		return;
+	}
+
+	if ((pFileHeader->nMethod == METHOD_STORE || pFileHeader->nMethod == METHOD_STORE_AND_STREAMCIPHER_KEYTABLE) && pFileHeader->desc.lSizeUncompressed != pFileHeader->desc.lSizeCompressed)
+	{
+		THROW_ZIPDIR_ERROR(ZD_ERROR_VALIDATION_FAILED, "File with STORE compression method declares its compressed size not matching its uncompressed size. File descriptor is inconsistent, archive content may be damaged, please try to repair the archive");
+		return;
+	}
+	uint64 localHeaderOffset;
+	localHeaderOffset = extra.lLocalHeaderOffset;
+	Seek(localHeaderOffset);
+	DynArray<char> pBuffer;
+	unsigned nBufferLength = sizeof(ZipFile::LocalFileHeader) + pFileHeader->nFileNameLength;
+	pBuffer.resize(nBufferLength);
+	Read(&pBuffer[0], nBufferLength);
+	const ZipFile::LocalFileHeader* pLocalFileHeader = (const ZipFile::LocalFileHeader*)&pBuffer[0];
+
+	FileEntry fileEntry(*pFileHeader, extra, *pLocalFileHeader);
+
+	// when using encrypted headers we should always initialize data offsets from CDR
+	if ((m_encryptedHeaders != HEADERS_NOT_ENCRYPTED || m_nInitMethod >= ZD_INIT_FULL) && pFileHeader->desc.lSizeCompressed)
+	{
+		InitDataOffset(fileEntry, pFileHeader);
+	}
+
+	if (m_bBuildFileEntryMap)
+		m_mapFileEntries.insert(FileEntryMap::value_type(strFilePath, fileEntry));
+
+	if (m_bBuildFileEntryTree)
+		m_treeFileEntries.Add(strFilePath, fileEntry);
+
+	// Optimized File Entry.
+	if (m_bBuildOptimizedFileEntry)
+	{
+		uint32 nHash = ZipDir::FileNameHash(strFilePath);
+
+#ifndef _RELEASE
+		if (g_cvars.pakVars.nValidateFileHashes)
+		{
+			ZipDir::Cache::ValidateFilenameHash(nHash, strFilePath, m_szFilename);
+		}
+#endif
+
+		fileEntry.nNameOffset = nHash;
+		m_optimizedFileEntries.push_back(fileEntry);
+	}
+}
 
 //////////////////////////////////////////////////////////////////////////
 // initializes the actual data offset in the file in the fileEntry structure
 // searches to the local file header, reads it and calculates the actual offset in the file
-void ZipDir::CacheFactory::InitDataOffset(FileEntry& fileEntry, const ZipFile::CDRFileHeader* pFileHeader)
+void ZipDir::CacheFactory::InitDataOffset(FileEntry& fileEntry, const ZipFile::CDRFileHeader* pFileHeader, const SExtraZipFileDataZip64* pExtra)
 {
 	/*
 	   // without validation, it would be like this:
@@ -904,16 +1027,19 @@ void ZipDir::CacheFactory::InitDataOffset(FileEntry& fileEntry, const ZipFile::C
 	   if (nError != ZD_ERROR_SUCCESS)
 	   THROW_ZIPDIR_ERROR(nError,"Cannot refresh file entry. Probably corrupted file header inside zip file");
 	 */
+	uint64 localHeaderOffset;
+	if (!m_bIsZip64)localHeaderOffset = (uint64)pFileHeader->lLocalHeaderOffset;
+	if (m_bIsZip64) localHeaderOffset = pExtra->lLocalHeaderOffset;
 
 	if (m_encryptedHeaders != HEADERS_NOT_ENCRYPTED)
 	{
 		// use CDR instead of local header
 		// The pak encryption tool asserts that there is no extra data at the end of the local file header, so don't add any extra data from the CDR header.
-		fileEntry.nFileDataOffset = pFileHeader->lLocalHeaderOffset + sizeof(LocalFileHeader) + pFileHeader->nFileNameLength;
+		fileEntry.nFileDataOffset = localHeaderOffset + sizeof(LocalFileHeader) + pFileHeader->nFileNameLength;
 	}
 	else
 	{
-		Seek(pFileHeader->lLocalHeaderOffset);
+		Seek(localHeaderOffset);
 
 		// read the local file header and the name (for validation) into the buffer
 		DynArray<char> pBuffer;
@@ -944,12 +1070,12 @@ void ZipDir::CacheFactory::InitDataOffset(FileEntry& fileEntry, const ZipFile::C
 			return;
 		}
 
-		fileEntry.nFileDataOffset = pFileHeader->lLocalHeaderOffset + sizeof(LocalFileHeader) + pLocalFileHeader->nFileNameLength + pLocalFileHeader->nExtraFieldLength;
+		fileEntry.nFileDataOffset = localHeaderOffset + sizeof(LocalFileHeader) + pLocalFileHeader->nFileNameLength + pLocalFileHeader->nExtraFieldLength;
 	}
 
 #ifndef OPTIMIZED_READONLY_ZIP_ENTRY
 	// make sure it's the same file and the fileEntry structure is properly initialized
-	assert(fileEntry.nFileHeaderOffset == pFileHeader->lLocalHeaderOffset);
+	assert(fileEntry.nFileHeaderOffset == localHeaderOffset);
 
 	fileEntry.nEOFOffset = fileEntry.nFileDataOffset + fileEntry.desc.lSizeCompressed;
 #endif
@@ -1089,7 +1215,7 @@ char* ZipDir::CacheFactory::GetFilePath(const char* pFileName, uint16 nFileNameL
 }
 
 // seeks in the file relative to the starting position
-void ZipDir::CacheFactory::Seek(uint32 nPos, int nOrigin)  // throw
+void ZipDir::CacheFactory::Seek(int64 nPos, int nOrigin)  // throw
 {
 	//#if CRY_PLATFORM_WINDOWS
 	//	if (_fseeki64 (m_f, (__int64)nPos, nOrigin))
@@ -1123,7 +1249,7 @@ int64 ZipDir::CacheFactory::Tell()  // throw
 	return nPos;
 }
 
-bool ZipDir::CacheFactory::Read(void* pDest, unsigned nSize)  // throw
+bool ZipDir::CacheFactory::Read(void* pDest, uint64 nSize)  // throw
 {
 	//fread (pDest, nSize, 1, m_f)
 	if (ZipDir::FRead(&m_fileExt, pDest, nSize, 1) != 1)

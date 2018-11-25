@@ -55,6 +55,48 @@ enum
 	METHOD_DEFLATE_AND_STREAMCIPHER_KEYTABLE = 14, // Deflate + Timur's encryption technique on a per file basis
 };
 
+//wrapping data from CDREnd or CDREnd64 for Zip64
+struct CDREndData
+{
+	uint32 lSignature;       // end of central dir signature
+	uint32 nDisk;            // number of this disk
+	uint32 nCDRStartDisk;    // number of the disk with the start of the central directory
+	uint32 numEntriesOnDisk; // total number of entries in the central directory on this disk (using 32 bit for now)
+	uint32 numEntriesTotal;  // total number of entries in the central directory  (using 32 bit for now) 
+	uint32 lCDRSize;         // size of the central directory (using 32 bit for now)
+	uint64 lCDROffset;       // offset of start of central directory with respect to the starting disk number
+	uint16 nCommentLength;   // .ZIP file comment length (only in CDREnd)
+};
+
+//zip64 end of central directory record
+struct CDREnd64
+{
+	enum { SIGNATURE = 0x06064b50 };
+	uint32 lSignature;       // zip64 end of central dir signature     4 bytes (0x06064b50)
+	uint64 lCDREnd64Size;    // size of zip64 end of central directory record    8 bytes
+	uint16 lVerMadeBy;       // version made by                 2 bytes
+	uint16 lVerToExt;        // version needed to extract       2 bytes
+	uint32 nDisk;            // number of this disk             4 bytes
+	uint32 nCDRStartDisk;    // number of the disk with the start of the central directory  4 bytes
+	uint64 numEntriesOnDisk; // total number of entries in the central directory on this disk  8 bytes
+	uint64 numEntriesTotal;  // total number of entries in the central directory               8 bytes
+	uint64 lCDRSize;         // size of the central directory   8 bytes
+	uint64 lCDROffset;       // offset of start of central directory with respect to the starting disk number        8 bytes
+
+	AUTO_STRUCT_INFO;
+
+	// zip64 extensible data sector    (variable size)
+};
+//zip64 end of central directory locator
+struct CDREnd64Locator
+{
+	enum { SIGNATURE = 0x07064b50 };
+	uint32 lSignature;         // zip64 end of central dir locator signature  4 bytes  (0x07064b50)
+	uint32 nCDREnd64StartDisk; // number of the disk with the start of the zip64 end of central directory   4 bytes
+	uint64 lCDREnd64Offset;    // relative offset of the zip64 end of central directory record              8 bytes
+	uint32 numDisksTotal;      // total number of disks           4 bytes
+};
+
 // end of Central Directory Record
 // followed by the .zip file comment (variable size, can be empty, obtained from nCommentLength)
 struct CDREnd
@@ -189,7 +231,8 @@ struct CDRFileHeader
 //    extra field (variable size)
 struct LocalFileHeader
 {
-	enum {SIGNATURE = 0x04034b50};
+	enum {SIGNATURE   = 0x04034b50};
+	enum {SIGNATURESC = 0x14034b50 }; // looks like its same with some data in extra field 
 	uint32         lSignature;     // local file header signature     4 bytes  (0x04034b50)
 	uint16         nVersionNeeded; // version needed to extract       2 bytes
 	uint16         nFlags;         // general purpose bit flag        2 bytes

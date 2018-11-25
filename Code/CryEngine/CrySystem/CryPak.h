@@ -58,7 +58,7 @@ struct CCachedFileData : public _i_reference_target_t
 	   void __cdecl operator delete  (void *p) { g_pPakHeap->Free(p); };
 	 */
 
-	unsigned GetFileDataOffset()
+	uint64 GetFileDataOffset()
 	{
 		return m_pZip->GetFileDataOffset(m_pFileEntry);
 	}
@@ -438,7 +438,7 @@ public: // ---------------------------------------------------------------------
 	virtual char const* const GetLocalizationFolder() const override { return m_sLocalizationFolder.c_str(); }
 
 	// Only returns useful results on a dedicated server at present - and only if the pak is already opened
-	virtual void GetCachedPakCDROffsetSize(const char* szName, uint32& offset, uint32& size) override;
+	virtual void GetCachedPakCDROffsetSize(const char* szName, uint64& offset, uint64& size) override;
 
 	//! Puts the memory statistics into the given sizer object
 	//! According to the specifications in interface ICrySizer

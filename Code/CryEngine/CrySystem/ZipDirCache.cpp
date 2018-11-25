@@ -509,7 +509,7 @@ ZipDir::ErrorEnum ZipDir::Cache::Refresh(FileEntry* pFileEntry)
 }
 
 //////////////////////////////////////////////////////////////////////////
-uint32 ZipDir::Cache::GetFileDataOffset(FileEntry* pFileEntry)
+uint64 ZipDir::Cache::GetFileDataOffset(FileEntry* pFileEntry)
 {
 	if (pFileEntry->nFileDataOffset == pFileEntry->INVALID_DATA_OFFSET)
 	{
@@ -692,7 +692,7 @@ int64 ZipDir::FSeek(CZipFile* file, int64 origin, int command)
 			return CIOWrapper::Fseek(file->m_file, (long)origin, command);
 		}
 #else
-		return CIOWrapper::Fseek(file->m_file, (long)origin, command);
+		return CIOWrapper::Fseek(file->m_file, origin, command);
 #endif
 	}
 }
