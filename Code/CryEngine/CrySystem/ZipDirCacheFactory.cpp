@@ -877,7 +877,7 @@ bool ZipDir::CacheFactory::BuildFileEntryMap()
 				break;
 			case EXTRA_ZIP64:
 				{
-					memcpy(&extraZip64, pAttrData, sizeof(SExtraZipFileData));
+					memcpy(&extraZip64, pAttrData, sizeof(SExtraZipFileDataZip64));
 				}
 				break;
 			}
