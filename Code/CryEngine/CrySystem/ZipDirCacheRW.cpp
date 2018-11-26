@@ -664,8 +664,17 @@ ZipDir::ErrorEnum ZipDir::CacheRW::ReadFile(FileEntry* pFileEntry, void* pCompre
 		else
 		{
 			unsigned long nSizeUncompressed = pFileEntry->desc.lSizeUncompressed;
-			if (Z_OK != ZipRawUncompress(m_pHeap, pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
-				return ZD_ERROR_CORRUPTED_DATA;
+
+			if (pFileEntry->nMethod == 100) //0x64 - zstd compression
+			{
+				if (Z_OK != ZipRawUncompressZSTD(pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
+					return ZD_ERROR_CORRUPTED_DATA;
+			}
+			else
+			{
+				if (Z_OK != ZipRawUncompress(m_pHeap, pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
+					return ZD_ERROR_CORRUPTED_DATA;
+			}
 		}
 	}
 

@@ -4,6 +4,7 @@
 #include "MTSafeAllocator.h"
 #include <CryCore/smartptr.h>
 #include <zlib.h>
+#include <zstd.h>
 #include "ZipFileFormat.h"
 #include "ZipDirStructures.h"
 #include <time.h>
@@ -505,8 +506,10 @@ ZipDir::FileEntry::FileEntry(const CDRFileHeader& header, const SExtraZipFileDat
 	this->lSizeUncompressed = extra.lOriginalSize;
 
 	// make an estimation (at least this offset should be there), but we don't actually know yet
-	this->nFileDataOffset = (uint64)header.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength;
-	this->nEOFOffset = header.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength + header.desc.lSizeCompressed;
+	//this->nFileDataOffset = (uint64)extra.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength + header.nExtraFieldLength;
+	//this->nEOFOffset = (uint64)extra.lLocalHeaderOffset + sizeof(ZipFile::LocalFileHeader) + header.nFileNameLength + header.nExtraFieldLength + (uint32)extra.lCompressedSize;
+	this->nFileDataOffset = (uint64)extra.lLocalHeaderOffset + ZipFile::LocalFileHeader::HEADERSIZESC;
+	this->nEOFOffset = (uint64)extra.lLocalHeaderOffset + ZipFile::LocalFileHeader::HEADERSIZESC + (uint32)extra.lCompressedSize;
 }
 #endif //#ifndef OPTIMIZED_READONLY_ZIP_ENTRY
 
@@ -556,6 +559,26 @@ int ZipDir::ZipRawCompress(CMTSafeHeap* pHeap, const void* pUncompressed, unsign
 
 	err = deflateEnd(&stream);
 	return err;
+}
+
+int ZipDir::ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize)
+{
+	LOADING_TIME_PROFILE_SECTION(gEnv->pSystem);
+	size_t nReturnCode; //the number of bytes decompressed into `dst` (<= `dstCapacity`). or an errorCode if it fails(which can be tested using ZSTD_isError()).
+	nReturnCode = ZSTD_decompress(pUncompressed, (size_t)pDestSize, pCompressed, (size_t)nSrcSize);
+
+	int nReturn;
+	if (ZSTD_isError(nReturnCode))
+	{
+		CryLogAlways("[ERROR] ZSTD_decompress returned: %s\n", ZSTD_getErrorName(nReturnCode));
+		nReturn = (int)nReturnCode;
+	}
+	else
+	{
+		nReturn = Z_OK;
+	}
+
+	return nReturn;
 }
 
 // finds the subdirectory entry by the name, using the names from the name pool

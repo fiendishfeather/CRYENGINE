@@ -270,6 +270,9 @@ extern int ZipRawUncompress(CMTSafeHeap* pHeap, void* pUncompressed, unsigned lo
 // returns one of the Z_* errors (Z_OK upon success), and the size in *pDestSize. the pCompressed buffer must be at least nSrcSize*1.001+12 size
 extern int ZipRawCompress(CMTSafeHeap* pHeap, const void* pUncompressed, unsigned long* pDestSize, void* pCompressed, unsigned long nSrcSize, int nLevel);
 
+// Uncompresses data that is compressed with method 0x64 (zstd) in the Zip file
+extern int ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize);
+
 // fseek wrapper with memory in file support.
 extern int64 FSeek(CZipFile* zipFile, int64 origin, int command);
 
@@ -385,8 +388,8 @@ struct FileEntry
 	uint64 nEOFOffset;
 
 	//files size - only for Zip64 (in DataDescriptor for Zip32)
-	uint64 lSizeCompressed;   // compressed size                 8 bytes
-	uint64 lSizeUncompressed; // Original uncompressed file size 8 bytes
+	uint64 lSizeCompressed=0;   // compressed size                 8 bytes
+	uint64 lSizeUncompressed=0; // Original uncompressed file size 8 bytes
 
 	FileEntry() : nFileHeaderOffset(INVALID_DATA_OFFSET){}
 	FileEntry(const ZipFile::CDRFileHeader& header, const SExtraZipFileData& extra);
@@ -425,6 +428,11 @@ struct FileEntry
 		  nMethod != ZipFile::METHOD_STORE_AND_STREAMCIPHER_KEYTABLE &&
 		  nMethod != ZipFile::METHOD_STORE
 		  );
+	}
+
+	bool IsZip64()
+	{
+		return (lSizeUncompressed > 0);
 	}
 
 	void GetMemoryUsage(ICrySizer* pSizer) const { /* nothing */ }

@@ -314,7 +314,7 @@ ZipDir::ErrorEnum ZipDir::Cache::ReadFile(FileEntry* pFileEntry, void* pCompress
 
 #if defined(VERIFY_PAK_ENTRY_CRC)
 		//Perform CRC Checking if required
-		if (pFileEntry->desc.lCRC32 != 0 && nDataOffset == 0 && (nDataReadSize == -1 || nDataReadSize == pFileEntry->desc.lSizeUncompressed))
+		if (pFileEntry->desc.lCRC32 != 0 && nDataOffset == 0 && (nDataReadSize == -1 || nDataReadSize == pFileEntry->desc.lSizeUncompressed) && (!pFileEntry->IsZip64())/*dont check crc if zip64 for now*/)
 		{
 			uint32 computedCRC32 = crc32(0, (unsigned char*)pUncompressed, pFileEntry->desc.lSizeUncompressed);
 			if (pFileEntry->desc.lCRC32 != computedCRC32)
@@ -464,9 +464,18 @@ ZipDir::ErrorEnum ZipDir::Cache::DecompressFile(FileEntry* pFileEntry, void* pCo
 		memcpy(pBuffer, pCompressed, pFileEntry->desc.lSizeCompressed);
 	}
 
-	AUTO_LOCK_CS(csDecmopressLock);
-	if (Z_OK != ZipRawUncompress(m_pCacheData->m_pHeap, pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
-		return ZD_ERROR_CORRUPTED_DATA;
+	if (pFileEntry->nMethod == 100) //0x64 - zstd compression
+	{
+		AUTO_LOCK_CS(csDecmopressLock);
+		if (Z_OK != ZipRawUncompressZSTD(pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
+			return ZD_ERROR_CORRUPTED_DATA;
+	}
+	else
+	{
+		AUTO_LOCK_CS(csDecmopressLock);
+		if (Z_OK != ZipRawUncompress(m_pCacheData->m_pHeap, pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
+			return ZD_ERROR_CORRUPTED_DATA;
+	}
 	return ZD_ERROR_SUCCESS;
 }
 

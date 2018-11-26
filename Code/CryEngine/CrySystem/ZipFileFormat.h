@@ -229,10 +229,12 @@ struct CDRFileHeader
 // followed by:
 //    file name (variable size)
 //    extra field (variable size)
+//!!! for SC whole header size (including file name and extra field) before file data is 4096
 struct LocalFileHeader
 {
 	enum {SIGNATURE   = 0x04034b50};
-	enum {SIGNATURESC = 0x14034b50 }; // looks like its same with some data in extra field 
+	enum {SIGNATURESC = 0x14034b50}; // looks like its same with some data in extra field
+	enum {HEADERSIZESC = 0x1000 }; // (including file name and extra field)
 	uint32         lSignature;     // local file header signature     4 bytes  (0x04034b50)
 	uint16         nVersionNeeded; // version needed to extract       2 bytes
 	uint16         nFlags;         // general purpose bit flag        2 bytes
