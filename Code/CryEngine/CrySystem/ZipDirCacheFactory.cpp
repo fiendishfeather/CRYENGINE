@@ -2,7 +2,8 @@
 
 #include "StdAfx.h"
 #include "MTSafeAllocator.h"
-#include <zlib.h>
+//#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 #include <CryCore/smartptr.h>
 #include "ZipFileFormat.h"
 #include "ZipDirStructures.h"

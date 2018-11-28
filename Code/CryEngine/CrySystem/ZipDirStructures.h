@@ -270,8 +270,8 @@ extern int ZipRawUncompress(CMTSafeHeap* pHeap, void* pUncompressed, unsigned lo
 // returns one of the Z_* errors (Z_OK upon success), and the size in *pDestSize. the pCompressed buffer must be at least nSrcSize*1.001+12 size
 extern int ZipRawCompress(CMTSafeHeap* pHeap, const void* pUncompressed, unsigned long* pDestSize, void* pCompressed, unsigned long nSrcSize, int nLevel);
 
-// Uncompresses data that is compressed with method 0x64 (zstd) in the Zip file
-extern int ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize);
+// (dont use; use zlib, it has zstd wrapped) Uncompresses data that is compressed with method 0x64 (zstd) in the Zip file
+extern int ZipRawUncompressZSTD_(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize);
 
 // fseek wrapper with memory in file support.
 extern int64 FSeek(CZipFile* zipFile, int64 origin, int command);

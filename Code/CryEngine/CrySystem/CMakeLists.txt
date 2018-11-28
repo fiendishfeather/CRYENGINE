@@ -487,6 +487,19 @@ add_sources("NoUberFile"
 		"StdAfx.h"
 	SOURCE_GROUP "Source Files"
 		"CryDLMalloc.c"
+	SOURCE_GROUP "ZstdZlibWrapper"
+		"ZstdZlibWrapper/gzclose.c"
+		"ZstdZlibWrapper/gzlib.c"
+		"ZstdZlibWrapper/gzread.c"
+		"ZstdZlibWrapper/gzwrite.c"
+		"ZstdZlibWrapper/zstd_zlibwrapper.c"
+		"ZstdZlibWrapper/gzcompatibility.h"
+		"ZstdZlibWrapper/gzguts.h"
+		"ZstdZlibWrapper/zstd_zlibwrapper.h"
+#		"../../SDKs/zlib-1.2.11/zlib.h"
+#		"../../SDKs/zlib-1.2.11/zconf.h"
+#		"../../SDKs/zlib-1.2.11/zutil.h"
+#		"../../SDKs/zstd-1.3.7/lib/zstd.h"
 )
 
 # -- crysystem_durango.waf_files --
@@ -524,11 +537,12 @@ end_sources()
 
 CryEngineModule(CrySystem PCH "StdAfx.cpp" SOLUTION_FOLDER "CryEngine")
 
-target_link_libraries( ${THIS_PROJECT} PRIVATE zlib expat lz4 md5 tomcrypt )
+target_link_libraries( ${THIS_PROJECT} PRIVATE zstd zlib expat lz4 md5 tomcrypt )
 use_scaleform()
 if (WIN32)
 	set_target_properties(${THIS_PROJECT} PROPERTIES LINK_FLAGS "/NODEFAULTLIB:libcmt.lib /NODEFAULTLIB:libcpmt.lib")
 	target_link_libraries(${THIS_PROJECT} PRIVATE wininet Shell32 Ole32 Gdi32)
+	target_include_directories( ${THIS_PROJECT} PRIVATE "${SDK_DIR}/zstd-1.3.7/lib" "ZstdZlibWrapper" )
 elseif(LINUX)
 	target_link_libraries( ${THIS_PROJECT} PRIVATE ncursesw m )
 elseif(APPLE)

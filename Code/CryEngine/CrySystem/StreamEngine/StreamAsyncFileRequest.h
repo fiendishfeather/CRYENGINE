@@ -35,10 +35,11 @@ struct SStreamEngineTempMemStats;
 #endif
 
 #if !defined(USE_EDGE_ZLIB)
-	#include <zlib.h>
-	#include <zutil.h>
-	#include <inftrees.h>
-	#include <inflate.h>
+	//#include <zlib.h>
+	#include <zstd_zlibwrapper.h>
+	//#include <zutil.h>
+	//#include <inftrees.h>
+	//#include <inflate.h>
 //	Undefine macros defined in zutil.h to prevent compilation errors in 'steamclientpublic.h', 'OVR_Math.h' etc.
 	#undef Assert
 	#undef Trace

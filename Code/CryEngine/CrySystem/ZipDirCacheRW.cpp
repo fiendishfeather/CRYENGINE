@@ -16,7 +16,8 @@
 
 #ifndef OPTIMIZED_READONLY_ZIP_ENTRY
 
-#include <zlib.h> // declaration of Z_OK for ZipRawDecompress
+//#include <zlib.h> // declaration of Z_OK for ZipRawDecompress
+#include <zstd_zlibwrapper.h>
 #include <CryCore/Platform/CryWindows.h>
 #include <CryMath/Random.h>
 
@@ -667,7 +668,9 @@ ZipDir::ErrorEnum ZipDir::CacheRW::ReadFile(FileEntry* pFileEntry, void* pCompre
 
 			if (pFileEntry->nMethod == 100) //0x64 - zstd compression
 			{
-				if (Z_OK != ZipRawUncompressZSTD(pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
+				//if (Z_OK != ZipRawUncompressZSTD(pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
+				//	return ZD_ERROR_CORRUPTED_DATA;
+				if (Z_OK != ZipRawUncompress(m_pHeap, pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
 					return ZD_ERROR_CORRUPTED_DATA;
 			}
 			else

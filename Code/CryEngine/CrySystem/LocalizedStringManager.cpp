@@ -27,7 +27,8 @@
 	#include <CrySystem/Scaleform/IScaleformHelper.h>
 #endif
 
-#include <zlib.h>
+//#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 
 #if !defined(_RELEASE)
 	#include "CrySizerImpl.h"

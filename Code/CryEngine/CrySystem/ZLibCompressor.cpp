@@ -6,7 +6,8 @@
 ******************************************************************************/
 
 #include "StdAfx.h"
-#include <zlib.h>
+//#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 #include "ZLibCompressor.h"
 #include <CryCore/TypeInfo_impl.h>
 #include <md5/md5.h>

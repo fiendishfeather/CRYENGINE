@@ -10,7 +10,8 @@
 
 #include "StdAfx.h"
 
-#include <zlib.h>
+//#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 #include "ZLibDecompressor.h"
 
 class CZLibInflateStream : public IZLibInflateStream

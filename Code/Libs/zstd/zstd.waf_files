@@ -1,0 +1,18 @@
+{
+	"NoUberFile":
+	{
+		"Root":
+		[
+				"../../SDKs/zlib-1.2.11/zlib.h",
+				"../../SDKs/zstd/include/zstd.h",
+				"../../SDKs/zstd/zlibWrapper/gzclose.c",
+				"../../SDKs/zstd/zlibWrapper/gzcompatibility.h",
+				"../../SDKs/zstd/zlibWrapper/gzguts.h",
+				"../../SDKs/zstd/zlibWrapper/gzlib.c",
+				"../../SDKs/zstd/zlibWrapper/gzread.c",
+				"../../SDKs/zstd/zlibWrapper/gzwrite.c",
+				"../../SDKs/zstd/zlibWrapper/zstd_zlibwrapper.c",
+				"../../SDKs/zstd/zlibWrapper/zstd_zlibwrapper.h"			
+		]
+	}
+}

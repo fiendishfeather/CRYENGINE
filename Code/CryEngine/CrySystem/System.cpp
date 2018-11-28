@@ -81,7 +81,8 @@
 #include <CrySystem/ZLib/IZLibCompressor.h>
 #include <CrySystem/ZLib/IZlibDecompressor.h>
 #include <CrySystem/ZLib/ILZ4Decompressor.h>
-#include <zlib.h>
+//#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 #include "RemoteConsole/RemoteConsole.h"
 #include "ImeManager.h"
 #include "BootProfiler.h"

@@ -4,7 +4,7 @@
 #include "System.h"
 #include "ZipEncrypt.h"
 #include <CryCore/smartptr.h>
-#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 #include "ZipFileFormat.h"
 #include "ZipDirStructures.h"
 

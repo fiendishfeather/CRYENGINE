@@ -20,7 +20,8 @@
 #include <CrySystem/IStreamEngine.h>
 #include <CryGame/IGameStartup.h>
 #include <CryCore/CryCrc32.h>
-#include <zlib.h>
+//#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 #include <md5/md5.h>
 #include "System.h"
 #include "FileIOWrapper.h"

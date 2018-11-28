@@ -417,6 +417,7 @@ endif()
 
 if (OPTION_SCALEFORMHELPER OR OPTION_ENGINE OR OPTION_SHADERCACHEGEN)
 	add_subdirectory ("Code/Libs/zlib")
+	add_subdirectory ("Code/Libs/zstd")
 	add_subdirectory ("Code/Libs/expat")
 	if (WIN32 OR WIN64)
 		add_subdirectory ("Code/Libs/png16")

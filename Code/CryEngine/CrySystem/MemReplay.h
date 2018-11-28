@@ -81,7 +81,8 @@ private:
 
 	#include <CrySystem/File/ICryPak.h>
 	#include <CryMemory/HeapAllocator.h>
-	#include  <zlib.h>
+	//#include  <zlib.h>
+	#include <zstd_zlibwrapper.h>
 
 namespace MemReplayEventIds
 {

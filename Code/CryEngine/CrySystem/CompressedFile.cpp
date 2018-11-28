@@ -2,7 +2,8 @@
 
 #include "StdAfx.h"
 #include "System.h"
-#include <zlib.h>
+//#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 
 bool CSystem::CompressDataBlock(const void* input, size_t inputSize, void* output, size_t& outputSize, int level)
 {

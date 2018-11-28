@@ -9,7 +9,7 @@
 #include "ZipDirCache.h"
 #include "ZipDirFind.h"
 #include "ZipDirCacheFactory.h"
-#include <zlib.h>
+#include <zstd_zlibwrapper.h>
 #include <CrySystem/Profilers/IDiskProfiler.h>
 #include <CryCore/Platform/IPlatformOS.h>
 #include "CryPak.h"
@@ -467,7 +467,9 @@ ZipDir::ErrorEnum ZipDir::Cache::DecompressFile(FileEntry* pFileEntry, void* pCo
 	if (pFileEntry->nMethod == 100) //0x64 - zstd compression
 	{
 		AUTO_LOCK_CS(csDecmopressLock);
-		if (Z_OK != ZipRawUncompressZSTD(pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
+		//if (Z_OK != ZipRawUncompressZSTD(pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
+		//	return ZD_ERROR_CORRUPTED_DATA;
+		if (Z_OK != ZipRawUncompress(m_pCacheData->m_pHeap, pUncompressed, &nSizeUncompressed, pBuffer, pFileEntry->desc.lSizeCompressed))
 			return ZD_ERROR_CORRUPTED_DATA;
 	}
 	else

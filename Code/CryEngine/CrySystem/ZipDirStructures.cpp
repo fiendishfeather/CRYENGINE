@@ -3,8 +3,9 @@
 #include "StdAfx.h"
 #include "MTSafeAllocator.h"
 #include <CryCore/smartptr.h>
-#include <zlib.h>
-#include <zstd.h>
+//#include <zlib.h>
+#include <zstd_zlibwrapper.h>
+//#include <zstd.h>
 #include "ZipFileFormat.h"
 #include "ZipDirStructures.h"
 #include <time.h>
@@ -22,6 +23,7 @@ LINK_SYSTEM_LIBRARY("shlwapi.lib")
 using namespace ZipFile;
 
 void        ZlibInflateElement_Impl(const void* pCompressed, void* pUncompressed, unsigned long compressedSize, unsigned long nUnCompressedSize, unsigned long* pUncompressedSize, int* pReturnCode, CMTSafeHeap* pHeap);
+//extern int z_inflate(z_streamp strm, int flush);
 
 static void ZlibOverlapInflate(int* pReturnCode, z_stream* pZStream, ZipDir::UncompressLookahead& lookahead, unsigned char* pOutput, unsigned long nOutputLen, const unsigned char* pInput, unsigned long nInputLen)
 {
@@ -89,7 +91,7 @@ static void ZlibOverlapInflate(int* pReturnCode, z_stream* pZStream, ZipDir::Unc
 		int nAvailIn = pZStream->avail_in;
 		int nAvailOut = pZStream->avail_out;
 
-		*pReturnCode = inflate(pZStream, Z_SYNC_FLUSH);
+		*pReturnCode = z_inflate(pZStream, Z_SYNC_FLUSH);
 
 		if (*pReturnCode == Z_BUF_ERROR)
 		{
@@ -129,7 +131,7 @@ static int ZlibInflateIndependentWriteCombined(z_stream* pZS) PREFAST_SUPPRESS_W
 		pZS->next_out = outputLocal;
 		pZS->avail_out = min((uInt)sizeof(outputLocal), nOutRemoteLen);
 
-		err = inflate(pZS, Z_SYNC_FLUSH);
+		err = z_inflate(pZS, Z_SYNC_FLUSH);
 
 		int nEmitted = (int)(pZS->next_out - outputLocal);
 		memcpy(pOutRemote, outputLocal, nEmitted);
@@ -164,7 +166,9 @@ void ZlibInflateElementPartial_Impl(
 
 	if (pZStream->total_out == 0)
 	{
-		*pReturnCode = inflateInit2(pZStream, -MAX_WBITS);
+		//zstd wrapped doesnt support inflateInit2
+		*pReturnCode = zz_inflateInit2(pZStream, -MAX_WBITS);
+		//*pReturnCode = inflateInit(pZStream);
 
 		if (*pReturnCode != Z_OK)
 		{
@@ -184,7 +188,7 @@ void ZlibInflateElementPartial_Impl(
 		pZStream->avail_in = nInputLen;
 
 		if (!bOutputWriteOnly)
-			*pReturnCode = inflate(pZStream, Z_SYNC_FLUSH);
+			*pReturnCode = z_inflate(pZStream, Z_SYNC_FLUSH);
 		else
 			*pReturnCode = ZlibInflateIndependentWriteCombined(pZStream);
 	}
@@ -210,14 +214,14 @@ void ZlibInflateElementPartial_Impl(
 		__debugbreak();
 #endif
 
-		inflateEnd(pZStream);
+		z_inflateEnd(pZStream);
 		return;
 	}
 
 	//check if we have finished the read
 	if (*pReturnCode == Z_STREAM_END)
 	{
-		inflateEnd(pZStream);
+		z_inflateEnd(pZStream);
 	}
 	else if (bUsingLocal)
 	{
@@ -245,7 +249,8 @@ void ZlibInflateElement_Impl(const void* pCompressed, void* pUncompressed, unsig
 	stream.zfree = CMTSafeHeap::StaticFree;
 	stream.opaque = pHeap;
 
-	err = inflateInit2(&stream, -MAX_WBITS);
+	err = zz_inflateInit2(&stream, -MAX_WBITS);
+	//err = inflateInit(&stream);
 	if (err != Z_OK)
 	{
 		*pReturnCode = err;
@@ -263,7 +268,7 @@ void ZlibInflateElement_Impl(const void* pCompressed, void* pUncompressed, unsig
 		// for some strange reason, passing Z_FINISH doesn't work -
 		// it seems the stream isn't finished for some files and
 		// inflate returns an error due to stream-end-not-reached (though expected) problem
-		err = inflate(&stream, Z_SYNC_FLUSH);
+		err = z_inflate(&stream, Z_SYNC_FLUSH);
 	}
 	else
 	{
@@ -271,16 +276,20 @@ void ZlibInflateElement_Impl(const void* pCompressed, void* pUncompressed, unsig
 		ZlibOverlapInflate(&err, &stream, lookahead, (unsigned char*)pUncompressed, nUnCompressedSize, (unsigned char*)pCompressed, compressedSize);
 	}
 
+	z_streamp streamp = (z_streamp)&stream;
+	int isUsisgZSTD;
+	isUsisgZSTD = ZWRAP_isUsingZSTDdecompression(streamp);
+
 	if (err != Z_STREAM_END && err != Z_OK)
 	{
-		inflateEnd(&stream);
+		z_inflateEnd(&stream);
 		*pReturnCode = err == Z_OK ? Z_BUF_ERROR : err;
 		return;
 	}
 
 	*pUncompressedSize = stream.total_out;
 
-	err = inflateEnd(&stream);
+	err = z_inflateEnd(&stream);
 	*pReturnCode = err;
 }
 
@@ -561,24 +570,25 @@ int ZipDir::ZipRawCompress(CMTSafeHeap* pHeap, const void* pUncompressed, unsign
 	return err;
 }
 
-int ZipDir::ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize)
+int ZipDir::ZipRawUncompressZSTD_(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize)
 {
-	LOADING_TIME_PROFILE_SECTION(gEnv->pSystem);
-	size_t nReturnCode; //the number of bytes decompressed into `dst` (<= `dstCapacity`). or an errorCode if it fails(which can be tested using ZSTD_isError()).
-	nReturnCode = ZSTD_decompress(pUncompressed, (size_t)pDestSize, pCompressed, (size_t)nSrcSize);
+	//LOADING_TIME_PROFILE_SECTION(gEnv->pSystem);
+	//size_t nReturnCode; //the number of bytes decompressed into `dst` (<= `dstCapacity`). or an errorCode if it fails(which can be tested using ZSTD_isError()).
+	//nReturnCode = ZSTD_decompress(pUncompressed, (size_t)pDestSize, pCompressed, (size_t)nSrcSize);
 
-	int nReturn;
-	if (ZSTD_isError(nReturnCode))
-	{
-		CryLogAlways("[ERROR] ZSTD_decompress returned: %s\n", ZSTD_getErrorName(nReturnCode));
-		nReturn = (int)nReturnCode;
-	}
-	else
-	{
-		nReturn = Z_OK;
-	}
+	//int nReturn;
+	//if (ZSTD_isError(nReturnCode))
+	//{
+	//	CryLogAlways("[ERROR] ZSTD_decompress returned: %s\n", ZSTD_getErrorName(nReturnCode));
+	//	nReturn = (int)nReturnCode;
+	//}
+	//else
+	//{
+	//	nReturn = Z_OK;
+	//}
 
-	return nReturn;
+	//return nReturn;
+	return -1;
 }
 
 // finds the subdirectory entry by the name, using the names from the name pool

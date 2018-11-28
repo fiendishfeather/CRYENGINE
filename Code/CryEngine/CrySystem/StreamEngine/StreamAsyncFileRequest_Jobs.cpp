@@ -17,6 +17,8 @@ extern void ZlibInflateElementPartial_Impl(
   unsigned char* pOutput, unsigned long nOutputLen, bool bOutputWriteOnly,
   const unsigned char* pInput, unsigned long nInputLen, unsigned long* pTotalOut);
 
+//extern int ZipDir::ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize);
+
 //#pragma("control %push O=0")             // to disable optimization
 
 #ifdef STREAMENGINE_ENABLE_LISTENER
@@ -214,17 +216,44 @@ void CAsyncIOFileRequest::DecompressBlockEntry(SStreamJobEngineState engineState
 		{
 			CryOptionalAutoLock<CryCriticalSection> decompLock(m_externalBufferLockDecompress, m_pExternalMemoryBuffer != NULL);
 
-			ZlibInflateElementPartial_Impl(
-			  &readStatus,
-			  m_pZlibStream,
-			  m_pLookahead,
-			  (unsigned char*)m_pReadMemoryBuffer + nBytesDecomped,
-			  m_nFileSize - nBytesDecomped,
-			  m_bWriteOnlyExternal,
-			  (unsigned char*)pSrc + nOffs,
-			  nBytes,
-			  &nBytesDecomped
-			  );
+			bool bIsZstd = false;
+
+			//using wrapper now, no need for check
+			////check if Zstd
+			//uint ZSTD_SIGNATURE = 0xFD2FB528; //28 B5 2F FD
+			//unsigned char uintBuff[16];
+			//for (int i = 0; i < sizeof(uint); i++) {
+			//	unsigned char buff = *(((unsigned char*)pSrc) + i);
+			//	uintBuff[i] = buff;
+			//}
+			//uint signature;
+			//memcpy(&signature, uintBuff, sizeof(uint));
+
+			//if (signature == ZSTD_SIGNATURE)
+			//{
+			//	bIsZstd = true;
+			//}
+
+			////non streaming for zstd decompress for now
+			//if (bIsZstd)
+			//{
+			//	ZipDir::ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize);
+			//}
+
+			if (!bIsZstd)
+			{
+				ZlibInflateElementPartial_Impl(
+					&readStatus,
+					m_pZlibStream,
+					m_pLookahead,
+					(unsigned char*)m_pReadMemoryBuffer + nBytesDecomped,
+					m_nFileSize - nBytesDecomped,
+					m_bWriteOnlyExternal,
+					(unsigned char*)pSrc + nOffs,
+					nBytes,
+					&nBytesDecomped
+				);
+			}
 		}
 
 		m_nBytesDecompressed = nBytesDecomped;
