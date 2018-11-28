@@ -3059,7 +3059,8 @@ CCachedFileData::~CCachedFileData()
 	// forced destruction
 	if (m_pFileData)
 	{
-		if(!m_pFileEntry->IsZip64())g_pPakHeap->FreeTemporary(m_pFileData);//temp only if not zip64, will investigate later
+		//if(!m_pFileEntry->IsZip64())g_pPakHeap->FreeTemporary(m_pFileData);//temp only if not zip64, will investigate later
+		g_pPakHeap->FreeTemporary(m_pFileData);
 		m_pFileData = NULL;
 	}
 
