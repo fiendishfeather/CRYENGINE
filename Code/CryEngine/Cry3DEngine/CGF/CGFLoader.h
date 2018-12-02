@@ -35,8 +35,76 @@ public:
 
 class CConverterCGF
 {
+private:
+	struct SVF_TSpace
+	{
+		ushort tangent_binormal[8];
+	};
+	struct TSpace
+	{
+		Vec4 tangent;
+		Vec3 bitangent;
+	};
+	union PosEl
+	{
+		uint16 uShortPos;
+		int16 shortPos;
+	};
+	//Union vector
+	class UVec4
+	{
+		union U
+		{
+			float vfloat;
+			uint vuint;
+			int vint;
+
+			U& operator*(const float& other)
+			{
+				vfloat = vfloat*other;
+				return *this;
+			}
+			U& operator*(const U& other)
+			{
+				vfloat = vfloat * other.vfloat;
+				return *this;
+			}
+			U& operator+(const float& other)
+			{
+				vfloat = vfloat + other;
+				return *this;
+			}
+			
+			U() {}
+			U(float f) : vfloat(f) {}
+		};
+	public:
+		U x;
+		U y;
+		U z;
+		U w;
+	
+		UVec4(float _x, float _y, float _z, float _w)
+		{
+			x.vfloat = _x;
+			y.vfloat = _y;
+			z.vfloat = _z;
+			w.vfloat = _w;
+		}
+
+		float Dot(UVec4 v)
+		{
+			return x.vfloat * v.x.vfloat + y.vfloat * v.y.vfloat + z.vfloat * v.z.vfloat + w.vfloat * v.w.vfloat;
+		}
+
+		Vec4 ToVec4()
+		{
+			return Vec4(x.vfloat, y.vfloat, z.vfloat, w.vfloat);
+		}
+
+	};
 public:
-	CConverterCGF(IChunkFile::ChunkDesc* chunkDesc);
+	CConverterCGF(IChunkFile::ChunkDesc* chunkDesc, AABB bbox);
 	~CConverterCGF();
 
 	void Process();
@@ -51,6 +119,12 @@ public:
 	int GetCount();
 	int GetElemSize();
 	void* GetStreamData();
+
+    float PackB2F(short i);
+	short PackF2B(float f);
+
+	//SC Vertex Shader - translated assembly code
+	TSpace VSAssembly(Vec3 positions, uint tangentHex, uint bitangentHex, bool debug = false);
 private:
 	IChunkFile::ChunkDesc* pChunkDesc;
 
@@ -58,6 +132,7 @@ private:
 	int m_nCount;
 	int m_nElemSize;
 	void* m_pStreamData;
+	AABB m_bbox;
 
 	int m_nElemSizeNew;
 };
@@ -91,7 +166,7 @@ private:
 	bool          LoadGeomChunk(CNodeCGF* pNode, IChunkFile::ChunkDesc* pChunkDesc);
 	bool          LoadCompiledMeshChunk(CNodeCGF* pNode, IChunkFile::ChunkDesc* pChunkDesc);
 	bool          LoadMeshSubsetsChunk(CMesh& mesh, IChunkFile::ChunkDesc* pChunkDesc, std::vector<std::vector<uint16>>& globalBonesPerSubset);
-	bool          LoadStreamDataChunk(int nChunkId, void*& pStreamData, int& nStreamType, int& nCount, int& nElemSize, bool& bSwapEndianness);
+	bool          LoadStreamDataChunk(int nChunkId, void*& pStreamData, int& nStreamType, int& nCount, int& nElemSize, bool& bSwapEndianness, AABB bbox = AABB());
 	template<class T>
 	bool          LoadStreamChunk(CMesh& mesh, const MESH_CHUNK_DESC_0801& chunk, ECgfStreamType Type, CMesh::EStream MStream);
 	template<class TA, class TB>
@@ -188,7 +263,7 @@ private:
 	AllocFncPtr         m_pAllocFnc;
 	DestructFncPtr      m_pDestructFnc;
 
-	bool isConverted;
+	bool m_bIsConverted;
 };
 
 #endif //__CGFLoader_h__

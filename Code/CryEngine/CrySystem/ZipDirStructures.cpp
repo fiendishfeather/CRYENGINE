@@ -5,7 +5,7 @@
 #include <CryCore/smartptr.h>
 //#include <zlib.h>
 #include <zstd_zlibwrapper.h>
-//#include <zstd.h>
+#include <zstd.h>
 #include "ZipFileFormat.h"
 #include "ZipDirStructures.h"
 #include <time.h>
@@ -152,7 +152,7 @@ static int ZlibInflateIndependentWriteCombined(z_stream* pZS) PREFAST_SUPPRESS_W
 void ZlibInflateElementPartial_Impl(
   int* pReturnCode, z_stream* pZStream, ZipDir::UncompressLookahead* pLookahead,
   unsigned char* pOutput, unsigned long nOutputLen, bool bOutputWriteOnly,
-  const unsigned char* pInput, unsigned long nInputLen, unsigned long* pTotalOut) PREFAST_SUPPRESS_WARNING(6262)
+  const unsigned char* pInput, unsigned long nInputLen, unsigned long* pTotalOut, bool bForceZSTD = false) PREFAST_SUPPRESS_WARNING(6262)
 {
 	z_stream localStream;
 	bool bUsingLocal = false;
@@ -174,6 +174,21 @@ void ZlibInflateElementPartial_Impl(
 		{
 			return;
 		}
+	}
+
+	if (bForceZSTD)
+	{
+		//enum from zstd_zlibwrapper.c
+		typedef enum { ZWRAP_ZLIB_STREAM, ZWRAP_ZSTD_STREAM, ZWRAP_UNKNOWN_STREAM } ZWRAP_stream_type;
+		pZStream->reserved = ZWRAP_ZSTD_STREAM;
+
+		//check if stored uncompressed size is equal to determined uncompressed size
+		unsigned long long determinedUmcompressedSize;
+		determinedUmcompressedSize = ZSTD_getFrameContentSize(pInput, (size_t)nInputLen);
+		if (determinedUmcompressedSize != nOutputLen)
+		{
+			CryLogAlways("ZipDirStructures.cpp | Stored uncompressed size is not equal to determined uncompressed size");
+		} 
 	}
 
 	pZStream->next_out = pOutput;
@@ -210,16 +225,32 @@ void ZlibInflateElementPartial_Impl(
 	//error during inflate
 	if (*pReturnCode != Z_STREAM_END && *pReturnCode != Z_OK)
 	{
+		if (*pReturnCode != Z_NEED_DICT)
+		{
 #ifndef _RELEASE
-		__debugbreak();
+			__debugbreak();
 #endif
-
+		}
+		if (*pReturnCode == Z_NEED_DICT)
+		{
+			CryLogAlways("Decompression needs Dictionary!");
+		}
+		if (bForceZSTD && g_cvars.sys_streaming_in_blocks)
+		{
+			//we cant use block streaming for now with zstd and data.p4k (looks like we need dictionary to decompress some files)
+			//notify user to disable block streaming 
+			CryLogAlways("Can't use block streaming with data.p4k currently, use cvar: sys_streaming_in_blocks=0");
+		}
 		z_inflateEnd(pZStream);
 		return;
 	}
 
 	//check if we have finished the read
 	if (*pReturnCode == Z_STREAM_END)
+	{
+		z_inflateEnd(pZStream);
+	}
+	else if (bForceZSTD && (*pReturnCode == Z_STREAM_END || *pReturnCode == Z_OK) )
 	{
 		z_inflateEnd(pZStream);
 	}

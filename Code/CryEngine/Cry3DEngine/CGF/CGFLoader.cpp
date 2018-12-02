@@ -66,7 +66,7 @@ void Destruct(T* obj, void (* pDestructFnc)(void*))
 }
 }
 /////////////////////////////////////////////////////////////////////////
-CConverterCGF::CConverterCGF(IChunkFile::ChunkDesc* chunkDesc)
+CConverterCGF::CConverterCGF(IChunkFile::ChunkDesc* chunkDesc, AABB bbox)
 {
 	pChunkDesc = chunkDesc;
 	STREAM_DATA_CHUNK_DESC_0800& chunk = *(STREAM_DATA_CHUNK_DESC_0800*)chunkDesc->data;
@@ -74,6 +74,7 @@ CConverterCGF::CConverterCGF(IChunkFile::ChunkDesc* chunkDesc)
 	m_nCount = chunk.nCount;
 	m_nElemSize = chunk.nElementSize;
 	m_pStreamData =  (char*)chunkDesc->data + sizeof(chunk);
+	m_bbox = bbox;
 }
 void CConverterCGF::Process()
 {
@@ -99,6 +100,32 @@ void CConverterCGF::ConvertP3s_c4b_t2s()
 {
 	//m_pStreamDataNew = (void*)malloc(m_nCount + sizeof(SVF_P3S_C4B_T2S));
 	m_nElemSizeNew = sizeof(SVF_P3S_C4B_T2S);
+	//STREAM_DATA_CHUNK_DESC_0800& chunk = *(STREAM_DATA_CHUNK_DESC_0800*)pChunkDesc->data;
+	int currPos = 0;
+	for (int i=0;i< m_nCount*m_nElemSizeNew;i=(i+ m_nElemSizeNew))
+	{
+		currPos = i;
+		SVF_P3S_C4B_T2S &p3s_c4b_t2sElem = *(SVF_P3S_C4B_T2S*)((unsigned char*)m_pStreamData + currPos);
+		PosEl posX;
+		PosEl posY;
+		PosEl posZ;
+		posX.uShortPos = p3s_c4b_t2sElem.xyz.x;
+		posY.uShortPos = p3s_c4b_t2sElem.xyz.y;
+		posZ.uShortPos = p3s_c4b_t2sElem.xyz.z;
+
+		float multiplerX = abs(m_bbox.min.x - m_bbox.max.x) / 2.0f;
+		float multiplerY = abs(m_bbox.min.y - m_bbox.max.y) / 2.0f;
+		float multiplerZ = abs(m_bbox.min.z - m_bbox.max.z) / 2.0f;
+		if (multiplerX < 1) { multiplerX = 1; }
+		if (multiplerY < 1) { multiplerY = 1; }
+		if (multiplerZ < 1) { multiplerZ = 1; }
+
+		p3s_c4b_t2sElem.xyz = Vec3f16(
+			PackB2F(posX.shortPos) * multiplerX + (m_bbox.min.x + m_bbox.max.x) / 2.0f,
+			PackB2F(posY.shortPos) * multiplerY + (m_bbox.min.y + m_bbox.max.y) / 2.0f,
+			PackB2F(posZ.shortPos) * multiplerZ + (m_bbox.min.z + m_bbox.max.z) / 2.0f
+		);
+	}
 }
 void CConverterCGF::ConvertNormals()
 { 
@@ -107,6 +134,34 @@ void CConverterCGF::ConvertNormals()
 void CConverterCGF::ConvertTangents()
 { 
 	m_nElemSizeNew = sizeof(SMeshTangents);
+	char* pStreamTemp = new char[m_nCount*8];
+	memcpy(pStreamTemp, m_pStreamData, m_nCount * 8);
+	m_pStreamData = new char[m_nCount*m_nElemSizeNew];
+
+	int currPosOldStream = 0;
+	int currPosNewStream = 0;
+	for (int i=0;i< m_nCount;i++)
+	{
+		currPosOldStream = i * 8;
+		currPosNewStream = i * m_nElemSizeNew;
+
+		uint &oldtangent = *(uint*)((unsigned char*)pStreamTemp + currPosOldStream);
+		uint &oldbitangent = *(uint*)((unsigned char*)pStreamTemp + currPosOldStream+sizeof(uint));
+
+		SVF_TSpace &newTangent_bitangent= *(SVF_TSpace*)((unsigned char*)m_pStreamData + currPosNewStream);
+
+		TSpace tSpace = VSAssembly(Vec3(0, 0, 0), oldtangent, oldbitangent);
+
+		newTangent_bitangent.tangent_binormal[0] = (ushort)PackF2B(tSpace.tangent.x);
+		newTangent_bitangent.tangent_binormal[1] = (ushort)PackF2B(tSpace.tangent.y);
+		newTangent_bitangent.tangent_binormal[2] = (ushort)PackF2B(tSpace.tangent.z);
+		newTangent_bitangent.tangent_binormal[3] = (ushort)PackF2B(tSpace.tangent.w);
+		newTangent_bitangent.tangent_binormal[4] = (ushort)PackF2B(tSpace.bitangent.x);
+		newTangent_bitangent.tangent_binormal[5] = (ushort)PackF2B(tSpace.bitangent.y);
+		newTangent_bitangent.tangent_binormal[6] = (ushort)PackF2B(tSpace.bitangent.z);
+		newTangent_bitangent.tangent_binormal[7] = (ushort)PackF2B(tSpace.tangent.w);
+	}
+	//memcpy(m_pStreamData, pStreamTemp, m_nCount * 8);
 }
 void CConverterCGF::TranslateElemSize()
 {
@@ -141,6 +196,123 @@ int CConverterCGF::GetElemSize()
 void* CConverterCGF::GetStreamData()
 {
 	return m_pStreamData;
+}
+
+float CConverterCGF::PackB2F(short i)
+{
+	return (float)((float)i / 32767.0f);
+}
+
+short CConverterCGF::PackF2B(float f)
+{
+	return (short)(f* 32767.0f);
+}
+CConverterCGF::TSpace CConverterCGF::VSAssembly(Vec3 positions, uint tangentHex, uint bitangentHex, bool debug)
+{
+	//very slow and inefficient, will investigate how tangents are exactly packed and optimize later
+	TSpace tspac;
+
+	//REGISTERS
+	UVec4 v0 = UVec4(0, 0, 0, 0), v1 = UVec4(0, 0, 0, 0), v2 = UVec4(0, 0, 0, 0), v3 = UVec4(0, 0, 0, 0), v4 = UVec4(0, 0, 0, 0), v5 = UVec4(0, 0, 0, 0);
+	UVec4 r0 = UVec4(0, 0, 0, 0), r1 = UVec4(0, 0, 0, 0), r2 = UVec4(0, 0, 0, 0), r3 = UVec4(0, 0, 0, 0);
+	UVec4 o0 = UVec4(0, 0, 0, 0), o1 = UVec4(0, 0, 0, 0), o3 = UVec4(0, 0, 0, 0), o4 = UVec4(0, 0, 0, 0), o5 = UVec4(0, 0, 0, 0);
+	Vec3 o2 = Vec3();
+
+	UVec4 InstanceBufferRaw0 = UVec4(1, 0, 0, 31.85579f);
+	UVec4 InstanceBufferRaw1 = UVec4(0, 1, 0, -17.761f);
+	UVec4 InstanceBufferRaw2 = UVec4(0, 0, 1, 12.2023f);
+
+	v3.x.vuint = tangentHex;
+	v4.x.vuint = bitangentHex;
+
+	r0.w.vfloat = 1;
+	r1.x.vfloat = positions.x; r1.y.vfloat = positions.y; r1.z.vfloat = positions.z;
+	r1.w.vfloat = 1;
+	r2.x.vint = v5.x.vint + 47;
+	r2.x.vint = r2.x.vint * 14;
+	r0.x.vfloat = InstanceBufferRaw0.Dot(r1);
+	r0.y.vfloat = InstanceBufferRaw1.Dot(r1);
+	r0.z.vfloat = InstanceBufferRaw2.Dot(r1);
+	o5.x.vfloat = r0.x.vfloat; o5.y.vfloat = r0.y.vfloat; o5.z.vfloat = r0.z.vfloat; //o5.xyz = r0.xyzx; 
+	r0.x.vuint = v3.x.vuint;
+	r0.z.vuint = v4.x.vuint;
+	r0.y.vuint = r0.x.vuint >> 15; r0.w.vuint = r0.z.vuint >> 15; //r0.yw = (.vuint2)r0.xz >> int2(15, 15);
+	//r1.xyzw = (int4)r0.xyzw & int4(32767, 32767, 32767, 32767);
+	r1.x.vuint = r0.x.vuint & 0x00007fff;
+	r1.y.vuint = r0.y.vuint & 0x00007fff;
+	r1.z.vuint = r0.z.vuint & 0x00007fff;
+	r1.w.vuint = r0.w.vuint & 0x00007fff;
+	//r0.xy = (int2)r0.xz & int2(2, 2);
+	r0.x.vuint = r0.x.vuint & 0x40000000;
+	r0.y.vuint = r0.z.vuint & 0x40000000;
+	//r1.xyzw = (int4)r1.xyzw + int4(-16383, -16383, -16383, -16383);
+	r1.x.vuint = r1.x.vuint + 0xffffc001;
+	r1.y.vuint = r1.y.vuint + 0xffffc001;
+	r1.z.vuint = r1.z.vuint + 0xffffc001;
+	r1.w.vuint = r1.w.vuint + 0xffffc001;
+	//r1.xyzw = (int4)r1.xyzw;
+	r1.x.vfloat = (float)r1.x.vint;
+	r1.y.vfloat = (float)r1.y.vint;
+	r1.z.vfloat = (float)r1.z.vint;
+	r1.w.vfloat = (float)r1.w.vint;
+	//r3.xyzw = float4(0.000061, 0.000061, 0.000061, 0.000061) * r1.xyzw;
+	r3.x.vfloat = r1.x.vfloat * 6.10388815e-005f;
+	r3.y.vfloat = r1.y.vfloat * 6.10388815e-005f;
+	r3.z.vfloat = r1.z.vfloat * 6.10388815e-005f;
+	r3.w.vfloat = r1.w.vfloat * 6.10388815e-005f;
+	r3.x.vfloat = Vec2(r3.x.vfloat, r3.y.vfloat).Dot(Vec2(r3.x.vfloat, r3.y.vfloat)); //r3.x = dot(r3.xy, r3.xy);
+	r3.y.vfloat = Vec2(r3.z.vfloat, r3.w.vfloat).Dot(Vec2(r3.z.vfloat, r3.w.vfloat)); //r3.y = dot(r3.zw, r3.zw);
+	//r0.zw = float2(1, 1) + -r3.xy
+	r0.z.vfloat = (r3.x.vfloat*(-1.0f)) + 1.0f;
+	r0.w.vfloat = (r3.y.vfloat*(-1.0f)) + 1.0f;
+	//r0.zw = max(float2(0, 0), r0.zw);
+	r0.z.vfloat = max(0.0f, r0.z.vfloat);
+	r0.w.vfloat = max(0.0f, r0.w.vfloat);
+	//r0.zw = sqrt(r0.zw);
+	r0.z.vfloat = (float)sqrt(r0.z.vfloat);
+	r0.w.vfloat = (float)sqrt(r0.w.vfloat);
+	//r0.xy = r0.xy ? -r0.zw : r0.zw;
+	if (r0.x.vuint != 0) r0.x.vfloat = r0.z.vfloat*(-1.0f); else r0.x.vfloat = r0.z.vfloat;
+	if (r0.y.vuint != 0) r0.y.vfloat = r0.w.vfloat*(-1.0f); else r0.y.vfloat = r0.w.vfloat;
+	//r0.zw = r1.xy * float2(0.000061, 0.000061) + float2(0.000001, 0);
+	r0.z.vfloat = r1.y.vfloat * 6.10388815e-005f;//<------- do spraawdzenia y zmiana z x
+	r0.w.vfloat = r1.x.vfloat * 6.10388815e-005f + 9.99999997e-007f;
+	//r1.xy = r1.zw * float2(0.000061, 0.000061) + float2(-0.000001, 0);
+	r1.x.vfloat = r1.z.vfloat * 6.10388815e-005f + (-9.99999997e-007f);
+	r1.y.vfloat = r1.w.vfloat * 6.10388815e-005f;
+	//r3.x = dot(InstanceBuffer[r2.x]._m02_m00_m01, r0.xzw);
+
+
+	r3.x.vfloat = Vec3(InstanceBufferRaw0.z.vfloat, InstanceBufferRaw0.y.vfloat, InstanceBufferRaw0.x.vfloat).Dot(Vec3(r0.x.vfloat, r0.z.vfloat, r0.w.vfloat));
+	//r3.y = dot(InstanceBuffer[r2.x]._m12_m10_m11, r0.xzw);
+	r3.y.vfloat = Vec3(InstanceBufferRaw1.z.vfloat, InstanceBufferRaw1.y.vfloat, InstanceBufferRaw1.x.vfloat).Dot(Vec3(r0.x.vfloat, r0.z.vfloat, r0.w.vfloat));
+	//r3.z = dot(InstanceBuffer[r2.x]._m22_m20_m21, r0.xzw);
+	r3.z.vfloat = Vec3(InstanceBufferRaw2.z.vfloat, InstanceBufferRaw2.y.vfloat, InstanceBufferRaw2.x.vfloat).Dot(Vec3(r0.x.vfloat, r0.z.vfloat, r0.w.vfloat));
+	r1.w.vfloat = Vec3(r3.x.vfloat, r3.y.vfloat, r3.z.vfloat).Dot(Vec3(r3.x.vfloat, r3.y.vfloat, r3.z.vfloat)); //r1.w = dot(r3.xyz, r3.xyz);
+	r1.w.vfloat = (1.0f / (float)sqrt(r1.w.vfloat)); //r1.w = rsqrt(r1.w);
+	//o1.xyz = r1.www * r3.xyz;
+	o1.x.vfloat = r1.w.vfloat * r3.x.vfloat;
+	o1.y.vfloat = r1.w.vfloat * r3.y.vfloat;
+	o1.z.vfloat = r1.w.vfloat * r3.z.vfloat;
+	r1.w.vuint = v3.x.vuint & 0x80000000;
+	//r1.w = r1.w ? -1 : 1;
+	if (r1.w.vuint != 0) r1.w.vfloat = -1; else r1.w.vfloat = 1;
+	o1.w.vfloat = r1.w.vfloat;
+	r1.z.vfloat = r0.y.vfloat;
+	r3.x.vfloat = Vec3(InstanceBufferRaw0.x.vfloat, InstanceBufferRaw0.y.vfloat, InstanceBufferRaw0.z.vfloat).Dot(Vec3(r1.x.vfloat, r1.y.vfloat, r1.z.vfloat)); //r3.x = dot(InstanceBuffer[r2.x]._m00_m01_m02, r1.xyz);
+	r3.y.vfloat = Vec3(InstanceBufferRaw1.x.vfloat, InstanceBufferRaw1.y.vfloat, InstanceBufferRaw1.z.vfloat).Dot(Vec3(r1.x.vfloat, r1.y.vfloat, r1.z.vfloat)); //r3.y = dot(InstanceBuffer[r2.x]._m10_m11_m12, r1.xyz);
+	r3.z.vfloat = Vec3(InstanceBufferRaw2.x.vfloat, InstanceBufferRaw2.y.vfloat, InstanceBufferRaw2.z.vfloat).Dot(Vec3(r1.x.vfloat, r1.y.vfloat, r1.z.vfloat)); //r3.z = dot(InstanceBuffer[r2.x]._m20_m21_m22, r1.xyz);
+	r0.y.vfloat = Vec3(Vec3(r3.x.vfloat, r3.y.vfloat, r3.z.vfloat)).Dot(Vec3(r3.x.vfloat, r3.y.vfloat, r3.z.vfloat)); //r0.y = dot(r3.xyz, r3.xyz);
+	r0.y.vfloat = (float)(1.0 / sqrt(r0.y.vfloat)); //r0.y = rsqrt(r0.y);
+	//o2.xyz = r0.yyy * r3.xyz;
+	o2.x = r0.y.vfloat * r3.x.vfloat;
+	o2.y = r0.y.vfloat * r3.y.vfloat;
+	o2.z = r0.y.vfloat * r3.z.vfloat;
+
+	tspac.tangent = o1.ToVec4();
+	tspac.bitangent = o2;
+
+	return tspac;
 }
 CConverterCGF::~CConverterCGF()
 {
@@ -2958,7 +3130,7 @@ bool CLoaderCGF::LoadStreamChunk(CMesh& mesh, const MESH_CHUNK_DESC_0801& chunk,
 	int nElemCount;
 	int nElemSize;
 	bool bSwapEndianness;
-	if (!LoadStreamDataChunk(chunk.nStreamChunkID[Type], pStreamData, nStreamType, nElemCount, nElemSize, bSwapEndianness))
+	if (!LoadStreamDataChunk(chunk.nStreamChunkID[Type], pStreamData, nStreamType, nElemCount, nElemSize, bSwapEndianness,mesh.m_bbox))
 	{
 		return false;
 	}
@@ -3551,6 +3723,8 @@ bool CLoaderCGF::LoadCompiledMeshChunk(CNodeCGF* pNode, IChunkFile::ChunkDesc* p
 	// Read indices stream.
 	ok = ok && LoadIndexStreamChunk(mesh, chunk);
 
+	//after ^this step we know if we're dealing with SC mesh and we can use m_bIsConverted member from now.
+
 	// Read colors stream.
 	ok = ok && LoadStreamChunk<SMeshColor>(mesh, chunk, CGF_STREAM_COLORS, CMesh::COLORS_0);
 	ok = ok && LoadStreamChunk<SMeshColor>(mesh, chunk, CGF_STREAM_COLORS2, CMesh::COLORS_1);
@@ -3559,7 +3733,16 @@ bool CLoaderCGF::LoadCompiledMeshChunk(CNodeCGF* pNode, IChunkFile::ChunkDesc* p
 	ok = ok && LoadStreamChunk<int>(mesh, chunk, CGF_STREAM_VERT_MATS, CMesh::VERT_MATS);
 
 	// Read Tangent Streams.
+	/*if (m_bIsConverted)
+	{
+		chunk.nStreamChunkID[CGF_STREAM_TANGENTS] = 0;
+	}*/
 	ok = ok && LoadStreamChunk<SMeshTangents>(mesh, chunk, CGF_STREAM_TANGENTS, CMesh::TANGENTS);
+	////we'll load sc tangents as SMeshQTangents struct, sc tangents stream is too small to load as SMeshTangents (risk of crossing boundaries when accessing later)
+	//if (!m_bIsConverted)
+	//{
+	//	ok = ok && LoadStreamChunk<SMeshTangents>(mesh, chunk, CGF_STREAM_TANGENTS, CMesh::TANGENTS);
+	//}
 	ok = ok && LoadStreamChunk<SMeshQTangents>(mesh, chunk, CGF_STREAM_QTANGENTS, CMesh::QTANGENTS);
 
 	// Read interleaved stream.
@@ -3693,7 +3876,7 @@ bool CLoaderCGF::LoadMeshSubsetsChunk(CMesh& mesh, IChunkFile::ChunkDesc* pChunk
 }
 
 //////////////////////////////////////////////////////////////////////////
-bool CLoaderCGF::LoadStreamDataChunk(int nChunkId, void*& pStreamData, int& nStreamType, int& nCount, int& nElemSize, bool& bSwapEndianness)
+bool CLoaderCGF::LoadStreamDataChunk(int nChunkId, void*& pStreamData, int& nStreamType, int& nCount, int& nElemSize, bool& bSwapEndianness, AABB bbox)
 {
 	IChunkFile::ChunkDesc* pChunkDesc = m_pChunkFile->FindChunkById(nChunkId);
 	if (!pChunkDesc)
@@ -3722,17 +3905,17 @@ bool CLoaderCGF::LoadStreamDataChunk(int nChunkId, void*& pStreamData, int& nStr
 	pChunkDesc->bSwapEndian = false;
 
 	//if (chunk.nElementSize > 1000)
-	if(false)
+	if(chunk.nElementSize > 1000)
 	{
-		CConverterCGF *converter = new CConverterCGF(pChunkDesc);
+		CConverterCGF *converter = new CConverterCGF(pChunkDesc, bbox);
 		converter->Process();
 
 		nStreamType = converter->GetStreamType();
 		nCount = converter->GetCount();
 		nElemSize = converter->GetElemSize();
-		pStreamData = (char*)pChunkDesc->data + sizeof(chunk);
+		pStreamData = converter->GetStreamData();
 
-		isConverted = true;
+		m_bIsConverted = true;
 	}
 	else
 	{
@@ -3741,7 +3924,7 @@ bool CLoaderCGF::LoadStreamDataChunk(int nChunkId, void*& pStreamData, int& nStr
 		nElemSize = chunk.nElementSize;
 		pStreamData = (char*)pChunkDesc->data + sizeof(chunk);
 
-		isConverted = false;
+		m_bIsConverted = false;
 	}
 
 	return true;

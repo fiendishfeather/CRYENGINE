@@ -15,7 +15,7 @@
 extern void ZlibInflateElementPartial_Impl(
   int* pReturnCode, z_stream* pZStream, ZipDir::UncompressLookahead* pLookahead,
   unsigned char* pOutput, unsigned long nOutputLen, bool bOutputWriteOnly,
-  const unsigned char* pInput, unsigned long nInputLen, unsigned long* pTotalOut);
+  const unsigned char* pInput, unsigned long nInputLen, unsigned long* pTotalOut, bool bForceZSTD=false);
 
 //extern int ZipDir::ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize);
 
@@ -217,43 +217,43 @@ void CAsyncIOFileRequest::DecompressBlockEntry(SStreamJobEngineState engineState
 			CryOptionalAutoLock<CryCriticalSection> decompLock(m_externalBufferLockDecompress, m_pExternalMemoryBuffer != NULL);
 
 			bool bIsZstd = false;
-
-			//using wrapper now, no need for check
-			////check if Zstd
-			//uint ZSTD_SIGNATURE = 0xFD2FB528; //28 B5 2F FD
-			//unsigned char uintBuff[16];
-			//for (int i = 0; i < sizeof(uint); i++) {
-			//	unsigned char buff = *(((unsigned char*)pSrc) + i);
-			//	uintBuff[i] = buff;
-			//}
-			//uint signature;
-			//memcpy(&signature, uintBuff, sizeof(uint));
-
-			//if (signature == ZSTD_SIGNATURE)
-			//{
-			//	bIsZstd = true;
-			//}
-
-			////non streaming for zstd decompress for now
-			//if (bIsZstd)
-			//{
-			//	ZipDir::ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize);
-			//}
-
-			if (!bIsZstd)
-			{
-				ZlibInflateElementPartial_Impl(
-					&readStatus,
-					m_pZlibStream,
-					m_pLookahead,
-					(unsigned char*)m_pReadMemoryBuffer + nBytesDecomped,
-					m_nFileSize - nBytesDecomped,
-					m_bWriteOnlyExternal,
-					(unsigned char*)pSrc + nOffs,
-					nBytes,
-					&nBytesDecomped
-				);
+			bool bForceZSTD = false;
+			 
+			//check if Zstd
+			uint ZSTD_SIGNATURE = 0xFD2FB528; //28 B5 2F FD
+			unsigned char uintBuff[16];
+			for (int i = 0; i < sizeof(uint); i++) {
+				unsigned char buff = *(((unsigned char*)pSrc) + i);
+				uintBuff[i] = buff;
 			}
+			uint signature;
+			memcpy(&signature, uintBuff, sizeof(uint));
+
+			if (signature == ZSTD_SIGNATURE)
+			{
+				bIsZstd = true;
+			}
+
+			//non streaming for zstd decompress for now
+			if (bIsZstd)
+			{
+				//ZipDir::ZipRawUncompressZSTD(void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize);
+				bForceZSTD = true;
+			}
+
+			ZlibInflateElementPartial_Impl(
+				&readStatus,
+				m_pZlibStream,
+				m_pLookahead,
+				(unsigned char*)m_pReadMemoryBuffer + nBytesDecomped,
+				m_nFileSize - nBytesDecomped,
+				m_bWriteOnlyExternal,
+				(unsigned char*)pSrc + nOffs,
+				nBytes,
+				&nBytesDecomped,
+				bForceZSTD
+			);
+			
 		}
 
 		m_nBytesDecompressed = nBytesDecomped;
@@ -463,12 +463,19 @@ uint32 CAsyncIOFileRequest::PushDecompressPage(const SStreamJobEngineState& engi
 {
 	uint32 nError = 0;
 
-	for (uint32 nBlockPos = 0; !nError && (nBlockPos < nBytes); nBlockPos += STREAMING_BLOCK_SIZE)
+	if (!g_cvars.sys_streaming_in_blocks)
 	{
-		bool bLastBlock = (nBlockPos + STREAMING_BLOCK_SIZE) >= nBytes;
-		uint32 nBlockSize = min(nBytes - nBlockPos, (uint32)STREAMING_BLOCK_SIZE);
+		nError = PushDecompressBlock(engineState, pSrc, pSrcHdr, 0, nBytes, bLast);
+	}
+	else
+	{
+		for (uint32 nBlockPos = 0; !nError && (nBlockPos < nBytes); nBlockPos += STREAMING_BLOCK_SIZE)
+		{
+			bool bLastBlock = (nBlockPos + STREAMING_BLOCK_SIZE) >= nBytes;
+			uint32 nBlockSize = min(nBytes - nBlockPos, (uint32)STREAMING_BLOCK_SIZE);
 
-		nError = PushDecompressBlock(engineState, pSrc, pSrcHdr, nBlockPos, nBlockSize, bLast && bLastBlock);
+			nError = PushDecompressBlock(engineState, pSrc, pSrcHdr, nBlockPos, nBlockSize, bLast && bLastBlock);
+		}
 	}
 
 	return nError;
@@ -702,7 +709,9 @@ void CAsyncIOFileRequest::JobFinalize_Validate(const SStreamJobEngineState& engi
 #if !defined(_RELEASE)
 					CryWarning(VALIDATOR_MODULE_SYSTEM, VALIDATOR_ERROR_DBGBRK, "Streaming Engine Failed to verify a file (%s). Computed CRC32 %u does not match stored CRC32 %u", m_strFileName.c_str(), nCRC32, m_crc32FromHeader);
 #endif    //!_RELEASE
-					Failed(ERROR_VERIFICATION_FAIL);
+					//dont fail on crc for now, there is something wrong with crcs in data.p4k
+					//Failed(ERROR_VERIFICATION_FAIL);
+					CryWarning(VALIDATOR_MODULE_SYSTEM, VALIDATOR_ERROR_DBGBRK, "Streaming Engine Failed to verify a file (%s). Computed CRC32 %u does not match stored CRC32 %u", m_strFileName.c_str(), nCRC32, m_crc32FromHeader);
 				}
 			}
 		}

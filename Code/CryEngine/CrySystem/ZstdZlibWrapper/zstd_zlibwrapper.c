@@ -673,79 +673,86 @@ ZEXTERN int ZEXPORT z_inflate OF((z_streamp strm, int flush))
     if (zwd == NULL) return Z_STREAM_ERROR;
     if (zwd->decompState == ZWRAP_streamEnd) return Z_STREAM_END;
 
-    if (zwd->totalInBytes < ZLIB_HEADERSIZE) {
-        if (zwd->totalInBytes == 0 && strm->avail_in >= ZLIB_HEADERSIZE) {
-            if (MEM_readLE32(strm->next_in) != ZSTD_MAGICNUMBER) {
-                {   int const initErr = (zwd->windowBits) ?
-                                inflateInit2_(strm, zwd->windowBits, zwd->version, zwd->stream_size) :
-                                inflateInit_(strm, zwd->version, zwd->stream_size);
-                    LOG_WRAPPERD("ZLIB inflateInit errorCode=%d\n", initErr);
-                    if (initErr != Z_OK) return ZWRAPD_finishWithError(zwd, strm, initErr);
-                }
+	if (strm->reserved != ZWRAP_ZSTD_STREAM)
+	{
+		if (zwd->totalInBytes < ZLIB_HEADERSIZE) {
+			if (zwd->totalInBytes == 0 && strm->avail_in >= ZLIB_HEADERSIZE) {
+				if (MEM_readLE32(strm->next_in) != ZSTD_MAGICNUMBER) {
+					{   int const initErr = (zwd->windowBits) ?
+						inflateInit2_(strm, zwd->windowBits, zwd->version, zwd->stream_size) :
+						inflateInit_(strm, zwd->version, zwd->stream_size);
+					LOG_WRAPPERD("ZLIB inflateInit errorCode=%d\n", initErr);
+					if (initErr != Z_OK) return ZWRAPD_finishWithError(zwd, strm, initErr);
+					}
 
-                strm->reserved = ZWRAP_ZLIB_STREAM;
-                { size_t const freeErr = ZWRAP_freeDCtx(zwd);
-                  if (ZSTD_isError(freeErr)) goto error; }
+					strm->reserved = ZWRAP_ZLIB_STREAM;
+					{ size_t const freeErr = ZWRAP_freeDCtx(zwd);
+					if (ZSTD_isError(freeErr)) goto error; }
 
-                {   int const result = (flush == Z_INFLATE_SYNC) ?
-                                        inflateSync(strm) :
-                                        inflate(strm, flush);
-                    LOG_WRAPPERD("- inflate3 flush=%d avail_in=%d avail_out=%d total_in=%d total_out=%d res=%d\n",
-                                 (int)flush, (int)strm->avail_in, (int)strm->avail_out, (int)strm->total_in, (int)strm->total_out, res);
-                    return result;
-            }   }
-        } else {  /* ! (zwd->totalInBytes == 0 && strm->avail_in >= ZLIB_HEADERSIZE) */
-            size_t const srcSize = MIN(strm->avail_in, ZLIB_HEADERSIZE - zwd->totalInBytes);
-            memcpy(zwd->headerBuf+zwd->totalInBytes, strm->next_in, srcSize);
-            strm->total_in += srcSize;
-            zwd->totalInBytes += srcSize;
-            strm->next_in += srcSize;
-            strm->avail_in -= srcSize;
-            if (zwd->totalInBytes < ZLIB_HEADERSIZE) return Z_OK;
+					{   int const result = (flush == Z_INFLATE_SYNC) ?
+						inflateSync(strm) :
+						inflate(strm, flush);
+					LOG_WRAPPERD("- inflate3 flush=%d avail_in=%d avail_out=%d total_in=%d total_out=%d res=%d\n",
+						(int)flush, (int)strm->avail_in, (int)strm->avail_out, (int)strm->total_in, (int)strm->total_out, res);
+					return result;
+					}
+				}
+			}
+			else {  /* ! (zwd->totalInBytes == 0 && strm->avail_in >= ZLIB_HEADERSIZE) */
+				size_t const srcSize = MIN(strm->avail_in, ZLIB_HEADERSIZE - zwd->totalInBytes);
+				memcpy(zwd->headerBuf + zwd->totalInBytes, strm->next_in, srcSize);
+				strm->total_in += srcSize;
+				zwd->totalInBytes += srcSize;
+				strm->next_in += srcSize;
+				strm->avail_in -= srcSize;
+				if (zwd->totalInBytes < ZLIB_HEADERSIZE) return Z_OK;
 
-            if (MEM_readLE32(zwd->headerBuf) != ZSTD_MAGICNUMBER) {
-                z_stream strm2;
-                strm2.next_in = strm->next_in;
-                strm2.avail_in = strm->avail_in;
-                strm2.next_out = strm->next_out;
-                strm2.avail_out = strm->avail_out;
+				if (MEM_readLE32(zwd->headerBuf) != ZSTD_MAGICNUMBER) {
+					z_stream strm2;
+					strm2.next_in = strm->next_in;
+					strm2.avail_in = strm->avail_in;
+					strm2.next_out = strm->next_out;
+					strm2.avail_out = strm->avail_out;
 
-                {   int const initErr = (zwd->windowBits) ?
-                                inflateInit2_(strm, zwd->windowBits, zwd->version, zwd->stream_size) :
-                                inflateInit_(strm, zwd->version, zwd->stream_size);
-                    LOG_WRAPPERD("ZLIB inflateInit errorCode=%d\n", initErr);
-                    if (initErr != Z_OK) return ZWRAPD_finishWithError(zwd, strm, initErr);
-                }
+					{   int const initErr = (zwd->windowBits) ?
+						inflateInit2_(strm, zwd->windowBits, zwd->version, zwd->stream_size) :
+						inflateInit_(strm, zwd->version, zwd->stream_size);
+					LOG_WRAPPERD("ZLIB inflateInit errorCode=%d\n", initErr);
+					if (initErr != Z_OK) return ZWRAPD_finishWithError(zwd, strm, initErr);
+					}
 
-                /* inflate header */
-                strm->next_in = (unsigned char*)zwd->headerBuf;
-                strm->avail_in = ZLIB_HEADERSIZE;
-                strm->avail_out = 0;
-                {   int const dErr = inflate(strm, Z_NO_FLUSH);
-                    LOG_WRAPPERD("ZLIB inflate errorCode=%d strm->avail_in=%d\n",
-                                  dErr, (int)strm->avail_in);
-                    if (dErr != Z_OK)
-                        return ZWRAPD_finishWithError(zwd, strm, dErr);
-                }
-                if (strm->avail_in > 0) goto error;
+					/* inflate header */
+					strm->next_in = (unsigned char*)zwd->headerBuf;
+					strm->avail_in = ZLIB_HEADERSIZE;
+					strm->avail_out = 0;
+					{   int const dErr = inflate(strm, Z_NO_FLUSH);
+					LOG_WRAPPERD("ZLIB inflate errorCode=%d strm->avail_in=%d\n",
+						dErr, (int)strm->avail_in);
+					if (dErr != Z_OK)
+						return ZWRAPD_finishWithError(zwd, strm, dErr);
+					}
+					if (strm->avail_in > 0) goto error;
 
-                strm->next_in = strm2.next_in;
-                strm->avail_in = strm2.avail_in;
-                strm->next_out = strm2.next_out;
-                strm->avail_out = strm2.avail_out;
+					strm->next_in = strm2.next_in;
+					strm->avail_in = strm2.avail_in;
+					strm->next_out = strm2.next_out;
+					strm->avail_out = strm2.avail_out;
 
-                strm->reserved = ZWRAP_ZLIB_STREAM; /* mark as zlib stream */
-                { size_t const freeErr = ZWRAP_freeDCtx(zwd);
-                  if (ZSTD_isError(freeErr)) goto error; }
+					strm->reserved = ZWRAP_ZLIB_STREAM; /* mark as zlib stream */
+					{ size_t const freeErr = ZWRAP_freeDCtx(zwd);
+					if (ZSTD_isError(freeErr)) goto error; }
 
-                {   int const result = (flush == Z_INFLATE_SYNC) ?
-                                       inflateSync(strm) :
-                                       inflate(strm, flush);
-                    LOG_WRAPPERD("- inflate2 flush=%d avail_in=%d avail_out=%d total_in=%d total_out=%d res=%d\n",
-                                 (int)flush, (int)strm->avail_in, (int)strm->avail_out, (int)strm->total_in, (int)strm->total_out, res);
-                    return result;
-        }   }   }  /* if ! (zwd->totalInBytes == 0 && strm->avail_in >= ZLIB_HEADERSIZE) */
-    }  /* (zwd->totalInBytes < ZLIB_HEADERSIZE) */
+					{   int const result = (flush == Z_INFLATE_SYNC) ?
+						inflateSync(strm) :
+						inflate(strm, flush);
+					LOG_WRAPPERD("- inflate2 flush=%d avail_in=%d avail_out=%d total_in=%d total_out=%d res=%d\n",
+						(int)flush, (int)strm->avail_in, (int)strm->avail_out, (int)strm->total_in, (int)strm->total_out, res);
+					return result;
+					}
+				}
+			}  /* if ! (zwd->totalInBytes == 0 && strm->avail_in >= ZLIB_HEADERSIZE) */
+		}  /* (zwd->totalInBytes < ZLIB_HEADERSIZE) */
+	}
 
     strm->reserved = ZWRAP_ZSTD_STREAM; /* mark as zstd steam */
 
