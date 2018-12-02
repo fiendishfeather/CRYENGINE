@@ -309,6 +309,10 @@ DirectoryPtr CSnapshot::GetEngineRootDirectory() const
 DirectoryPtr CSnapshot::GetDirectoryByEnginePath(const QString& enginePath) const
 {
 	auto keyEnginePath = SEnginePath::ConvertUserToKeyPath(enginePath);
+	if (this==nullptr)
+	{
+		return nullptr;
+	}
 	if (m_pathToDirectory.isEmpty())
 	{
 		return nullptr;

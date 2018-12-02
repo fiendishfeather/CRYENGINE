@@ -993,6 +993,28 @@ void ZipDir::CacheFactory::AddFileEntry(char* strFilePath, const ZipFile::CDRFil
 	{
 		InitDataOffset(fileEntry, pFileHeader);
 	}
+	//data\\
+	//modify path string to save files from data folder in root
+
+	string path = string(strFilePath);
+	string prefix = path.substr(0,5);
+	string newFilePath;
+	if (prefix == "data\\")
+	{
+		newFilePath = path.substr(5,path.length()-5);
+	}
+	else
+	{
+		newFilePath = string(strFilePath);
+	}
+	//dont add data folder - string will be len 0 after prefix trim
+	if (newFilePath.length() == 0)return;
+
+	for (int i=0;i< newFilePath.length();i++)
+	{
+		strFilePath[i] = newFilePath[i];
+	}
+	strFilePath[newFilePath.length()] = '\0';
 
 	if (m_bBuildFileEntryMap)
 		m_mapFileEntries.insert(FileEntryMap::value_type(strFilePath, fileEntry));

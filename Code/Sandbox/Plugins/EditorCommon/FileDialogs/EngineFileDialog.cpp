@@ -649,6 +649,10 @@ struct CEngineFileDialog::Implementation
 		//TODO : this needs to handle base directory
 
 		auto snapshotPtr = m_models.m_enumerator->GetCurrentSnapshot();
+		/*if (!snapshotPtr)
+		{
+			return true;
+		}*/
 		auto dirPtr = snapshotPtr->GetDirectoryByEnginePath(enginePath);
 		
 		if (m_allowAnyFile)

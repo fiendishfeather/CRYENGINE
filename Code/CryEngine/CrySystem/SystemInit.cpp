@@ -2408,6 +2408,13 @@ void CSystem::OpenBasicPaks(bool bLoadGamePaks)
 	{
 		string paksFolder = buildFolder + string(PathUtil::GetGameFolder()) + "/*.pak";
 		m_env.pCryPak->OpenPacks(PathUtil::GetGameFolder(), paksFolder.c_str());
+		//load also p4k
+		//paksFolder = buildFolder + string(PathUtil::GetGameFolder()) + "/*.p4k";
+		//m_env.pCryPak->OpenPacks(PathUtil::GetGameFolder(), paksFolder.c_str());
+		//load SC Data.p4k pack file - from root dir
+		//string gameFolder = "";
+		//string dataFolder = buildFolder + "Data.pak";
+		//m_env.pCryPak->OpenPacks(gameFolder.c_str(), dataFolder.c_str());
 		InlineInitializationProcessing("CSystem::OpenBasicPaks OpenPacks( paksFolder.c_str() )");
 		s_bGamePaksLoaded = true;
 	}
