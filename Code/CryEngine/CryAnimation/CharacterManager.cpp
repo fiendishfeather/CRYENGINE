@@ -3548,6 +3548,13 @@ bool CharacterManager::LoadAnimationImageFileAIM(const char* filenameAIM)
 	}
 
 	const uint32 chunkCount = pChunkFile->NumChunks();
+	//hack to prevent loading directionalblends.img from data.p4k
+	//will need to investigate changes to chunks data structure first
+	if (chunkCount > 100)
+	{
+		CryWarning(VALIDATOR_MODULE_3DENGINE, VALIDATOR_WARNING, "Loading DirectionalBlends.img from SC Data.p4k is currently not supported.");
+		return false;
+	}
 	g_AnimationManager.m_arrGlobalAIM.resize(chunkCount);
 	for (uint32 i = 0; i < chunkCount; ++i)
 	{
