@@ -57,5 +57,8 @@ inline void SetXmlFromShaderParams(const SInputShaderResources& pShaderResources
 
 //////////////////////////////////////////////////////////////////////////
 inline void MigrateXmlLegacyData(SInputShaderResources& pShaderResources, const XmlNodeRef& node) { GetIEditorImpl()->Get3DEngine()->GetMaterialHelpers().MigrateXmlLegacyData(pShaderResources, node); }
+
+//////////////////////////////////////////////////////////////////////////
+inline void ConvertSCData(SInputShaderResources& pShaderResources, const XmlNodeRef& node) { GetIEditorImpl()->Get3DEngine()->GetMaterialHelpers().ConvertSCData(pShaderResources, node); }
 }
 

@@ -66,6 +66,9 @@ struct MaterialHelpers : public IMaterialHelpers
 
 	//////////////////////////////////////////////////////////////////////////
 	virtual void MigrateXmlLegacyData(SInputShaderResources& pShaderResources, const XmlNodeRef& node) const final;
+
+	//////////////////////////////////////////////////////////////////////////
+	virtual void ConvertSCData(SInputShaderResources& pShaderResources, const XmlNodeRef& node) const final;
 };
 
 #endif

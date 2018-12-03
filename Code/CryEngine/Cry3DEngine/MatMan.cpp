@@ -501,6 +501,7 @@ IMaterial* CMatMan::MakeMaterialFromXml(const char* sMtlName, const char* sMtlFi
 		if (sr)
 		{
 			s_materialHelpers.SetLightingFromXml(*sr, node);
+			//s_materialHelpers.ConvertSCData(*sr, node); //converting in SetTexturesFromXml
 			s_materialHelpers.SetTexturesFromXml(*sr, node, sMtlFilename);
 			s_materialHelpers.MigrateXmlLegacyData(*sr, node);
 

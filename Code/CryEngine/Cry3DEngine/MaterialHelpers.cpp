@@ -365,7 +365,33 @@ void MaterialHelpers::SetTexturesFromXml(SInputShaderResources& pShaderResources
 	{
 		XmlNodeRef texNode = texturesNode->getChild(c);
 
-		const char* const szTexmap = texNode->getAttr("Map");
+		const char* const szTexmapTemp = texNode->getAttr("Map");
+		const char* szTexmap;
+		//SC data converting
+		if (string(szTexmapTemp).substr(0, 7) == "TexSlot")
+		{ 
+			int texNumber;
+
+			//extract tex number from map attr, TexSlotXX
+			texNumber = atoi(string(szTexmapTemp).substr(7).c_str());
+			texNumber--;//in xml TexSlots start at 1; 1=diffuse slot in sc xml
+
+			const char* nativeTexName = MaterialHelpers::FindTexName((EEfResTextures)texNumber);
+			if (nativeTexName != NULL)
+			{
+				texNode->setAttr("Map", nativeTexName);
+				szTexmap = nativeTexName;
+			}
+			else
+			{
+				CryLogAlways("MaterialHelpers::SetTexturesFromXml() | Tex name on slot %d not found.", texNumber);
+			}
+		}
+		else
+		{
+			szTexmap = texNode->getAttr("Map");
+		}
+		//////////////////-
 
 		EEfResTextures texId = MaterialHelpers::FindTexSlot(szTexmap);
 		//int texId = MaterialHelpers::FindTexSlot(szTexmap);
@@ -406,6 +432,7 @@ void MaterialHelpers::SetTexturesFromXml(SInputShaderResources& pShaderResources
 				if (texType == eTT_MaxTexType || !IsTextureTypeExposed(texType))
 				{
 					texType = (ETEX_Type)strtoul(texTypeName, NULL, 10);
+					if (texType == eTT_1D)texType = eTT_2D; //special handling for sc - different ETEX_Type layout? | fix for invalid textype console spam
 				}
 
 				if (texType > eTT_MaxTexType || !IsTextureTypeExposed(texType))
@@ -848,6 +875,44 @@ void MaterialHelpers::MigrateXmlLegacyData(SInputShaderResources& pShaderResourc
 		const float legacyHDRDynMult = 2.0f;
 		const float legacyIntensityScale = 10.0f;  // Legacy scale factor 10000 divided by 1000 for kilonits
 		pShaderResources.m_LMaterial.m_Emittance.a = powf(glowAmount * legacyHDRDynMult, legacyHDRDynMult) * legacyIntensityScale;
+	}
+}
+
+//////////////////////////////////////////////////////////////////////////
+void MaterialHelpers::ConvertSCData(SInputShaderResources& pShaderResources, const XmlNodeRef& node) const
+{
+	XmlNodeRef texturesNode = node->findChild("Textures");
+	if (!texturesNode)
+	{
+		return;
+	}
+
+	//Convert TexSlotXX to native names.
+	for (int c = 0; c < texturesNode->getChildCount(); c++)
+	{
+		XmlNodeRef texNode = texturesNode->getChild(c);
+
+		const char* const szTexmap = texNode->getAttr("Map");
+		if (string(szTexmap).substr(0,7) != "TexSlot")
+		{
+			//its not sc asset
+			break;
+		}
+
+		int texNumber;
+
+		//extract tex number from map attr, TexSlotXX
+		texNumber = atoi(string(szTexmap).substr(7).c_str());
+		texNumber--;//in xml TexSlots start at 1; 1=diffuse slot in sc xml
+
+		const char* nativeTexName = FindTexName((EEfResTextures)texNumber);
+		if (nativeTexName == NULL)
+		{
+			CryLogAlways("MaterialHelpers::ConvertSCData() | Tex name on slot %d not found.", texNumber);
+			continue;
+		}
+
+		texNode->setAttr("Map", nativeTexName);
 	}
 }
 

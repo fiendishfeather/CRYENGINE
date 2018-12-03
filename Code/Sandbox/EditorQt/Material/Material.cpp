@@ -919,6 +919,7 @@ void CMaterial::Serialize(SerializeContext& ctx)
 			}
 
 			{
+				//MaterialHelpers::ConvertSCData(sr, node); //converting in SetTexturesFromXml
 				MaterialHelpers::SetTexturesFromXml(sr, node, GetRoot()->GetName().GetString());
 				MaterialHelpers::MigrateXmlLegacyData(sr, node);
 			}
