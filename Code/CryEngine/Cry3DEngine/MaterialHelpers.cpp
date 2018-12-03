@@ -77,6 +77,31 @@ s_TexSlotSemantics[] =
 	{ EFTT_UNKNOWN,          "EFTT_UNKNOWN",          false, nullptr,        ""        },
 };
 
+static struct
+{
+	EEfResTextures nativeSlot;
+	const char*    scSlotName;
+}
+s_SCTexSlotPairs[] =
+{
+	{ EFTT_DIFFUSE,				"TexSlot1"},
+	{ EFTT_NORMALS,				"TexSlot2"},
+	{ EFTT_CUSTOM_SECONDARY,	"TexSlot3"},
+	{ EFTT_SPECULAR,			"TexSlot4"},
+	{ EFTT_ENV,					"TexSlot5"},
+	{ EFTT_DETAIL_OVERLAY,		"TexSlot6"},
+	//{ EFTT_NORMALS,	"TexSlot7"},
+	//{ EFTT_NORMALS,	"TexSlot8"},
+	{ EFTT_CUSTOM,				"TexSlot9"},
+	//{ EFTT_NORMALS,	"TexSlot10"},
+	//{ EFTT_NORMALS,	"TexSlot11"},
+	{ EFTT_OPACITY,				"TexSlot12"},
+	{ EFTT_LAYER1_NORMALS,		"TexSlot13"},
+
+	// This is the terminator for the slotname-search
+	{ EFTT_UNKNOWN,				 nullptr}
+};
+
 #if 0
 static class Verify
 {
@@ -353,6 +378,22 @@ void MaterialHelpers::SetXmlFromTexMod(const SEfTexModificator& pTextureModifier
 }
 
 //////////////////////////////////////////////////////////////////////////
+EEfResTextures MaterialHelpers::FindSCTexSlotPair(const char* slotName, const char* shaderName) const
+{
+	if (slotName)
+	{
+		for (int i = 0; s_SCTexSlotPairs[i].scSlotName; i++)
+		{
+			if (stricmp(s_SCTexSlotPairs[i].scSlotName, slotName) == 0)
+			{
+				return s_SCTexSlotPairs[i].nativeSlot;
+			}
+		}
+	}
+	return EFTT_UNKNOWN;
+}
+
+//////////////////////////////////////////////////////////////////////////
 void MaterialHelpers::SetTexturesFromXml(SInputShaderResources& pShaderResources, const XmlNodeRef& node, const char* szBaseFileName) const
 {
 	XmlNodeRef texturesNode = node->findChild("Textures");
@@ -361,45 +402,45 @@ void MaterialHelpers::SetTexturesFromXml(SInputShaderResources& pShaderResources
 		return;
 	}
 
+	//SC Tex slots layout(Illum):
+	//TexSlot1->Diffuse|EFTT_DIFFUSE
+	//TexSlot2->Bumpmap|EFTT_NORMALS
+	//TexSlot3->[1] Custom|EFTT_CUSTOM_SECONDARY
+	//TexSlot4->Specular|EFTT_SPECULAR
+	//TexSlot5->Environment|EFTT_ENV
+	//TexSlot6->Detail|EFTT_DETAIL_OVERLAY
+	//TexSlot7->
+	//TexSlot8->
+	//TexSlot9->Custom|EFTT_CUSTOM
+	//TexSlot10->
+	//TexSlot11->
+	//TexSlot12->Opacity|EFTT_OPACITY
+	//TexSlot13->Layer1 Bumpmap|EFTT_LAYER1_NORMALS(2nd detailmap)
+	///////////////-
+	
 	for (int c = 0; c < texturesNode->getChildCount(); c++)
 	{
 		XmlNodeRef texNode = texturesNode->getChild(c);
+		EEfResTextures texId;
 
-		const char* const szTexmapTemp = texNode->getAttr("Map");
-		const char* szTexmap;
+		//const char* const szTexmapTemp = texNode->getAttr("Map");
+		const char* const szTexmap = texNode->getAttr("Map");
+		//const char* szTexmap;
 		//SC data converting
-		if (string(szTexmapTemp).substr(0, 7) == "TexSlot")
+		if (string(szTexmap).substr(0, 7) == "TexSlot")
 		{ 
-			int texNumber;
-
-			//extract tex number from map attr, TexSlotXX
-			texNumber = atoi(string(szTexmapTemp).substr(7).c_str());
-			texNumber--;//in xml TexSlots start at 1; 1=diffuse slot in sc xml
-
-			const char* nativeTexName = MaterialHelpers::FindTexName((EEfResTextures)texNumber);
-			if (nativeTexName != NULL)
+			texId = MaterialHelpers::FindSCTexSlotPair(szTexmap,"");
+			if (texId == EFTT_UNKNOWN)
 			{
-				texNode->setAttr("Map", nativeTexName);
-				szTexmap = nativeTexName;
-			}
-			else
-			{
-				CryLogAlways("MaterialHelpers::SetTexturesFromXml() | Tex name on slot %d not found.", texNumber);
+				CryLogAlways("MaterialHelpers::SetTexturesFromXml() | Tex pair for name %s not found. | %s -> %s", szTexmap, szBaseFileName, node->getAttr("Name"));
 			}
 		}
 		else
 		{
-			szTexmap = texNode->getAttr("Map");
+			texId = MaterialHelpers::FindTexSlot(szTexmap);
 		}
 		//////////////////-
 
-		EEfResTextures texId = MaterialHelpers::FindTexSlot(szTexmap);
-		//int texId = MaterialHelpers::FindTexSlot(szTexmap);
-		//test
-		/*if (texId >= 100)
-		{
-			texId = texId - 86;
-		}*/
 		if (texId == EFTT_UNKNOWN)
 		{
 			continue;

@@ -186,6 +186,7 @@ struct IMaterialHelpers
 
 	//////////////////////////////////////////////////////////////////////////
 	virtual void ConvertSCData(SInputShaderResources& pShaderResources, const XmlNodeRef& node) const = 0;
+	virtual EEfResTextures FindSCTexSlotPair(const char* slotName, const char* shaderName) const = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////////////////
