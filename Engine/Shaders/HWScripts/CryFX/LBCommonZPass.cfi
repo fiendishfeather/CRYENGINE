@@ -487,6 +487,7 @@ half merge(in half input1,in half input2)
 	attribs.Reflectance = cReflectance;
 	attribs.Smoothness = fSmoothness;
 
+	attribs.NormalWorld = normalize(mTangentToWS[2]);
 	#if %NORMAL_MAP || %BLENDLAYER || %DETAIL_MAPPING || %HIGHRES_LAYERS
 		attribs.NormalWorld = normalize(mul(vNormalTS, mTangentToWS));
 	#endif
