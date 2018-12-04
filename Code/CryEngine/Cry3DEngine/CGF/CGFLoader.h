@@ -112,6 +112,7 @@ public:
 	inline int16_t ReadINT16(char *ByteArray, int32_t Offset);
 
 	void ConvertP3s_c4b_t2s();
+	void ConvertP3f_c4b_t2s();
 	void ConvertNormals();
 	void ConvertTangents();
 

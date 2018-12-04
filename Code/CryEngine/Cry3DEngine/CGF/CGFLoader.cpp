@@ -83,7 +83,14 @@ void CConverterCGF::Process()
 	switch (m_nStreamType)
 	{
 	case CGF_STREAM_P3S_C4B_T2S:
-		ConvertP3s_c4b_t2s();
+		if (m_nElemSize==sizeof(SVF_P3S_C4B_T2S))
+		{
+			ConvertP3s_c4b_t2s();
+		}
+		if (m_nElemSize == sizeof(SVF_P3F_C4B_T2S))
+		{
+			ConvertP3f_c4b_t2s();
+		}
 		break;
 	case CGF_STREAM_NORMALS:
 		ConvertNormals();
@@ -125,6 +132,29 @@ void CConverterCGF::ConvertP3s_c4b_t2s()
 			PackB2F(posY.shortPos) * multiplerY + (m_bbox.min.y + m_bbox.max.y) / 2.0f,
 			PackB2F(posZ.shortPos) * multiplerZ + (m_bbox.min.z + m_bbox.max.z) / 2.0f
 		);
+	}
+}
+void CConverterCGF::ConvertP3f_c4b_t2s()
+{
+	m_nElemSizeNew = sizeof(SVF_P3S_C4B_T2S);
+
+	int currPos = 0;
+	int currPosNewStream = 0;
+	for (int i = 0; i < m_nCount; i++)
+	{
+		currPos = i * sizeof(SVF_P3F_C4B_T2S);
+		currPosNewStream = i * sizeof(SVF_P3S_C4B_T2S);
+		SVF_P3F_C4B_T2S &p3f_c4b_t2sElem = *(SVF_P3F_C4B_T2S*)((unsigned char*)m_pStreamData + currPos);
+		SVF_P3S_C4B_T2S p3s_c4b_t2sElem;
+		p3s_c4b_t2sElem.xyz = Vec3f16(
+			p3f_c4b_t2sElem.xyz.x,
+			p3f_c4b_t2sElem.xyz.y,
+			p3f_c4b_t2sElem.xyz.z
+		);
+
+		p3s_c4b_t2sElem.color = p3f_c4b_t2sElem.color;
+		p3s_c4b_t2sElem.st = p3f_c4b_t2sElem.st;
+		memcpy(((unsigned char*)m_pStreamData + currPosNewStream), &p3s_c4b_t2sElem, sizeof(SVF_P3S_C4B_T2S));
 	}
 }
 void CConverterCGF::ConvertNormals()
