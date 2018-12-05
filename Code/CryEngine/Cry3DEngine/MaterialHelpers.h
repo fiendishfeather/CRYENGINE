@@ -70,6 +70,12 @@ struct MaterialHelpers : public IMaterialHelpers
 	//////////////////////////////////////////////////////////////////////////
 	virtual void ConvertSCData(SInputShaderResources& pShaderResources, const XmlNodeRef& node) const final;
 	virtual EEfResTextures FindSCTexSlotPair(const char* slotName, const char* shaderName) const final;
+	virtual EEfResTextures FindSCTexSlotMatRefPairDiffuse(int matRefSlot) const final;
+	virtual EEfResTextures FindSCTexSlotMatRefPairBumpmap(int matRefSlot) const final;
+	virtual const char*    SCGetMtlDiff(const XmlNodeRef& node) const final;
+	virtual const char*    SCGetMtlSpec(const XmlNodeRef& node) const final;
+	virtual string    SCGetMtlSmooth(const XmlNodeRef& node) const final;
+	virtual XmlNodeRef     SCSetPublicParams(const XmlNodeRef& node) const final;
 };
 
 #endif

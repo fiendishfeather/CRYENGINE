@@ -1026,7 +1026,8 @@ void CMaterial::Serialize(SerializeContext& ctx)
 		//////////////////////////////////////////////////////////////////////////
 		if (!pMtlTmpl)
 		{
-			m_publicVarsCache = node->findChild("PublicParams");
+			//m_publicVarsCache = node->findChild("PublicParams");
+			m_publicVarsCache = MaterialHelpers::SCSetPublicParams(node);
 		}
 		else
 		{

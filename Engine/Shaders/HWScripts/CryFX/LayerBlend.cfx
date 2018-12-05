@@ -29,6 +29,23 @@ float Script : STANDARDSGLOBAL
 		"ShaderType = General;"
 >;
 
+//To support the newest SC changes in StringGenMasks
+//TODO: remove old defines flags with the new ones
+#ifdef %BLEND_MAP
+	#ifndef %BLENDLAYER
+		#define %BLENDLAYER
+	#endif
+#endif
+//always active
+#ifndef %HIGHRES_LAYERS
+	#define %HIGHRES_LAYERS
+#endif
+#ifdef %WEAR_DIRT_AO_TEXTURE
+	#ifndef %DETAIL_MAPPING
+		#define %DETAIL_MAPPING
+	#endif
+#endif
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////// Custom shading pass structure /////////////////////////////////////
 

@@ -74,3 +74,21 @@ Property
   Property    (Vertex Wear-Dirt-AO)
   Description (Vertex Wear-Dirt-AO)
 }
+
+Property
+{
+  Name = %BLEND_MAP
+  Mask = 0x8000
+  Property    (null)
+  Description (null)
+  Hidden
+}
+
+Property
+{
+  Name = %WEAR_DIRT_AO_TEXTURE
+  Mask = 0x10000
+  Property    (null)
+  Description (null)
+  Hidden
+}

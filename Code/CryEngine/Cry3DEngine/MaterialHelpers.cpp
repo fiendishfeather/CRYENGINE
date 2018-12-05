@@ -102,6 +102,43 @@ s_SCTexSlotPairs[] =
 	{ EFTT_UNKNOWN,				 nullptr}
 };
 
+static struct
+{
+	EEfResTextures nativeSlot;
+	const char*    scSlotName;
+}
+s_SCTexSlotPairsLB[] =
+{
+	{ EFTT_NORMALS,				"Custom"},
+	{ EFTT_DIFFUSE,				"[1] Custom"},
+	{ EFTT_EMITTANCE,			"Opacity"},
+	{ EFTT_DECAL_OVERLAY,			"Decal"},
+
+	// This is the terminator for the slotname-search
+	{ EFTT_UNKNOWN,				 nullptr}
+};
+
+static struct
+{
+	int matRefSlot;
+	EEfResTextures layerTexSlotDiffuse;
+	EEfResTextures layerTexSlotBumpmap;
+}
+s_SCTexSlotMatReferencesPairs[] =
+{
+	{ 0,	EFTT_LAYER1_DIFFUSE,	EFTT_LAYER1_NORMALS},
+	{ 1,	EFTT_LAYER2_DIFFUSE,	EFTT_LAYER2_NORMALS},
+	{ 2,	EFTT_LAYER3_DIFFUSE,	EFTT_LAYER3_NORMALS},
+	{ 3,	EFTT_LAYER4_DIFFUSE,	EFTT_LAYER4_NORMALS},
+	{ 4,	EFTT_LAYER1_WT_DIFFUSE,	EFTT_LAYER1_WT_NORMALS},
+	{ 5,	EFTT_LAYER2_WT_DIFFUSE,	EFTT_LAYER2_WT_NORMALS},
+	{ 6,	EFTT_LAYER3_WT_DIFFUSE,	EFTT_LAYER3_WT_NORMALS},
+	{ 7,	EFTT_LAYER4_WT_DIFFUSE,	EFTT_LAYER4_WT_NORMALS},
+
+	// This is the terminator for the slotname-search
+	//{ EFTT_UNKNOWN,				 nullptr, nullptr}
+};
+
 #if 0
 static class Verify
 {
@@ -382,6 +419,17 @@ EEfResTextures MaterialHelpers::FindSCTexSlotPair(const char* slotName, const ch
 {
 	if (slotName)
 	{
+		if (!strcmp(shaderName,"LayerBlend"))
+		{
+			for (int i = 0; s_SCTexSlotPairsLB[i].scSlotName; i++)
+			{
+				if (stricmp(s_SCTexSlotPairsLB[i].scSlotName, slotName) == 0)
+				{
+					return s_SCTexSlotPairsLB[i].nativeSlot;
+				}
+			}
+			return EFTT_UNKNOWN;
+		}
 		for (int i = 0; s_SCTexSlotPairs[i].scSlotName; i++)
 		{
 			if (stricmp(s_SCTexSlotPairs[i].scSlotName, slotName) == 0)
@@ -391,6 +439,130 @@ EEfResTextures MaterialHelpers::FindSCTexSlotPair(const char* slotName, const ch
 		}
 	}
 	return EFTT_UNKNOWN;
+}
+
+//////////////////////////////////////////////////////////////////////////
+EEfResTextures MaterialHelpers::FindSCTexSlotMatRefPairDiffuse(int matRefSlot) const
+{
+	for (int i = 0; i < 8; i++)
+	{
+		if (s_SCTexSlotMatReferencesPairs[i].matRefSlot == matRefSlot)
+		{
+			return s_SCTexSlotMatReferencesPairs[i].layerTexSlotDiffuse;
+		}
+	}
+	return EFTT_UNKNOWN;
+}
+
+//////////////////////////////////////////////////////////////////////////
+EEfResTextures MaterialHelpers::FindSCTexSlotMatRefPairBumpmap(int matRefSlot) const
+{
+	for (int i = 0; i < 8; i++)
+	{
+		if (s_SCTexSlotMatReferencesPairs[i].matRefSlot == matRefSlot)
+		{
+			return s_SCTexSlotMatReferencesPairs[i].layerTexSlotBumpmap;
+		}
+	}
+	return EFTT_UNKNOWN;
+}
+
+//////////////////////////////////////////////////////////////////////////
+const char*    MaterialHelpers::SCGetMtlDiff(const XmlNodeRef& node) const
+{
+	return node->getAttr("Diffuse");
+}
+
+//////////////////////////////////////////////////////////////////////////
+const char*    MaterialHelpers::SCGetMtlSpec(const XmlNodeRef& node) const
+{
+	return node->getAttr("Specular");
+}
+
+//////////////////////////////////////////////////////////////////////////
+string  MaterialHelpers::SCGetMtlSmooth(const XmlNodeRef& node) const
+{
+	//return ((float.Parse(val)) / 255).ToString();
+	string shininess(node->getAttr("Shininess"));
+	float newValue = (float)(atof(shininess) / 255.0f);
+	string  shininessNew(std::to_string(newValue).c_str());
+	return shininessNew;
+}
+
+//////////////////////////////////////////////////////////////////////////
+XmlNodeRef     MaterialHelpers::SCSetPublicParams(const XmlNodeRef& node) const
+{
+	XmlNodeRef newPublicParamsNode = GetISystem()->CreateXmlNode("PublicParams");
+	if (node->findChild("PublicParams")==0)
+	{
+		return newPublicParamsNode;
+	}
+
+	//clone first
+	const char* key(NULL);
+	const char* value(NULL);
+	int index=0;
+	while (node->findChild("PublicParams")->getAttributeByIndex(index,&key,&value))
+	{
+		newPublicParamsNode->setAttr(key, value);
+		index++;
+	}
+
+	//now add SC custom nodes
+	XmlNodeRef matReferencesNode = node->findChild("MatReferences");
+	if (!matReferencesNode)
+	{
+		return newPublicParamsNode;
+	}
+
+	IXmlParser* pXmlParser = GetISystem()->GetXmlUtils()->CreateXmlParser();
+
+	for (int c = 0; c < matReferencesNode->getChildCount(); c++)
+	{
+		XmlNodeRef matRefNode = matReferencesNode->getChild(c);
+		const char* layerFilePath = matRefNode->getAttr("File");
+		int layerSlot = atoi(matRefNode->getAttr("Slot"));
+		if (!layerFilePath)
+		{
+			continue;
+		}
+
+		XmlNodeRef mtlLayerNode = pXmlParser->ParseFile(layerFilePath, false);
+		if (!mtlLayerNode)
+		{
+			continue;
+		}
+		if (layerSlot == 0)newPublicParamsNode->setAttr("Diff1",   SCGetMtlDiff(mtlLayerNode));
+		if (layerSlot == 0)newPublicParamsNode->setAttr("Spec1",   SCGetMtlSpec(mtlLayerNode));
+		if (layerSlot == 0)newPublicParamsNode->setAttr("Smooth1", SCGetMtlSmooth(mtlLayerNode));
+
+		if (layerSlot == 1)newPublicParamsNode->setAttr("Diff2", SCGetMtlDiff(mtlLayerNode));
+		if (layerSlot == 1)newPublicParamsNode->setAttr("Spec2", SCGetMtlSpec(mtlLayerNode));
+		if (layerSlot == 1)newPublicParamsNode->setAttr("Smooth2", SCGetMtlSmooth(mtlLayerNode));
+
+		if (layerSlot == 2)newPublicParamsNode->setAttr("Diff3", SCGetMtlDiff(mtlLayerNode));
+		if (layerSlot == 2)newPublicParamsNode->setAttr("Spec3", SCGetMtlSpec(mtlLayerNode));
+		if (layerSlot == 2)newPublicParamsNode->setAttr("Smooth3", SCGetMtlSmooth(mtlLayerNode));
+
+		if (layerSlot == 3)newPublicParamsNode->setAttr("Diff4", SCGetMtlDiff(mtlLayerNode));
+		if (layerSlot == 3)newPublicParamsNode->setAttr("Spec4", SCGetMtlSpec(mtlLayerNode));
+		if (layerSlot == 3)newPublicParamsNode->setAttr("Smooth4", SCGetMtlSmooth(mtlLayerNode));
+
+		// wear/tear layers
+		if (layerSlot == 4)newPublicParamsNode->setAttr("WearDiff1", SCGetMtlDiff(mtlLayerNode));
+		if (layerSlot == 4)newPublicParamsNode->setAttr("WearSpec1", SCGetMtlSpec(mtlLayerNode));
+
+		if (layerSlot == 5)newPublicParamsNode->setAttr("WearDiff2", SCGetMtlDiff(mtlLayerNode));
+		if (layerSlot == 5)newPublicParamsNode->setAttr("WearSpec2", SCGetMtlSpec(mtlLayerNode));
+
+		if (layerSlot == 6)newPublicParamsNode->setAttr("WearDiff3", SCGetMtlDiff(mtlLayerNode));
+		if (layerSlot == 6)newPublicParamsNode->setAttr("WearSpec3", SCGetMtlSpec(mtlLayerNode));
+
+		if (layerSlot == 7)newPublicParamsNode->setAttr("WearDiff4", SCGetMtlDiff(mtlLayerNode));
+		if (layerSlot == 7)newPublicParamsNode->setAttr("WearSpec4", SCGetMtlSpec(mtlLayerNode));
+	}
+
+	return newPublicParamsNode;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -430,6 +602,14 @@ void MaterialHelpers::SetTexturesFromXml(SInputShaderResources& pShaderResources
 		if (string(szTexmap).substr(0, 7) == "TexSlot")
 		{ 
 			texId = MaterialHelpers::FindSCTexSlotPair(szTexmap,"");
+			if (texId == EFTT_UNKNOWN)
+			{
+				CryLogAlways("MaterialHelpers::SetTexturesFromXml() | Tex pair for name %s not found. | %s -> %s", szTexmap, szBaseFileName, node->getAttr("Name"));
+			}
+		}
+		else if (!strcmp(node->getAttr("Shader"),"LayerBlend"))
+		{ 
+			texId = MaterialHelpers::FindSCTexSlotPair(szTexmap, "LayerBlend");
 			if (texId == EFTT_UNKNOWN)
 			{
 				CryLogAlways("MaterialHelpers::SetTexturesFromXml() | Tex pair for name %s not found. | %s -> %s", szTexmap, szBaseFileName, node->getAttr("Name"));
@@ -494,6 +674,90 @@ void MaterialHelpers::SetTexturesFromXml(SInputShaderResources& pShaderResources
 		}
 
 		SetTexModFromXml(*pShaderResources.m_Textures[texId].AddModificator(), texNode);
+	}
+
+	//sc data
+	//load MatReferences as layer blend tex slots
+	XmlNodeRef matReferencesNode = node->findChild("MatReferences");
+	if (!matReferencesNode)
+	{
+		return;
+	}
+
+	//inefficient to request xmlparser for each material, good enough for now until I implement proper layers system.
+	IXmlParser* pXmlParser = GetISystem()->GetXmlUtils()->CreateXmlParser();
+
+	for (int c = 0; c < matReferencesNode->getChildCount(); c++)
+	{
+		XmlNodeRef matRefNode = matReferencesNode->getChild(c);
+		const char* layerFilePath = matRefNode->getAttr("File");
+		int layerSlot = atoi(matRefNode->getAttr("Slot"));
+		if (!layerFilePath)
+		{
+			continue;
+		}
+
+		XmlNodeRef mtlLayerNode = pXmlParser->ParseFile(layerFilePath, false);
+		if (!mtlLayerNode)
+		{
+			continue;
+		}
+
+		//IMaterial *layerMtl = gEnv->p3DEngine->GetMaterialManager()->LoadMaterialFromXml(layerFilePath, mtlLayerNode);
+
+		int offsetToLayersSlots = EFTT_LAYER1_DIFFUSE;
+
+		XmlNodeRef layerMtlTexturesNode = mtlLayerNode->findChild("Textures");
+
+		//EEfResTextures texIdDiffuse = EFTT_UNKNOWN;
+		//EEfResTextures texIdBumpmap = EFTT_UNKNOWN;
+
+		for (int i=0;i< layerMtlTexturesNode->getChildCount();i++)
+		{
+			XmlNodeRef texNode = layerMtlTexturesNode->getChild(i);
+			const char* const szTexmap = texNode->getAttr("Map");
+			const char* const szFile = texNode->getAttr("File");
+
+			if (szTexmap)
+			{
+				EEfResTextures texId = EFTT_UNKNOWN;
+				if (!strcmp(szTexmap, "Diffuse"))
+				{
+					texId = MaterialHelpers::FindSCTexSlotMatRefPairDiffuse(layerSlot);
+				}
+				if (!strcmp(szTexmap, "Bumpmap"))
+				{
+					texId = MaterialHelpers::FindSCTexSlotMatRefPairBumpmap(layerSlot);
+				}
+				if (texId == EFTT_UNKNOWN)
+				{
+					continue;
+				}
+
+				if (layerSlot == 0)SCGetMtlDiff(mtlLayerNode);
+
+				pShaderResources.m_Textures[texId].m_Sampler.m_eTexType = eTT_2D;
+
+				if (szFile[0] == '.' && (szFile[1] == '/' || szFile[1] == '\\') &&
+					szBaseFileName && szBaseFileName[0])
+				{
+					// Texture file location is relative to material file folder
+					pShaderResources.m_Textures[texId].m_Name = PathUtil::Make(PathUtil::GetPathWithoutFilename(szBaseFileName), &szFile[2]);
+				}
+				else
+				{
+					pShaderResources.m_Textures[texId].m_Name = szFile;
+				}
+
+				int filter = pShaderResources.m_Textures[texId].m_Filter;
+				if (texNode->getAttr("Filter", filter))
+				{
+					pShaderResources.m_Textures[texId].m_Filter = filter;
+				}
+
+				SetTexModFromXml(*pShaderResources.m_Textures[texId].AddModificator(), texNode);
+			}
+		}
 	}
 }
 
