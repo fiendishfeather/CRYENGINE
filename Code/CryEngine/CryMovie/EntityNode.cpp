@@ -1676,21 +1676,24 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 	}
 	
 	bool afterLastPosKey = false;
-	if (pPosTrack->GetNumKeys()>0)
+	if (pPosTrack)
 	{
-		STrackKey lastPosKey;
-		SAnimTime posSubTrackMaxTime=0.0f;
-		for (int i=0;i<pPosTrack->GetSubTrackCount();i++)
+		if (pPosTrack->GetNumKeys() > 0)
 		{
-			pPosTrack->GetSubTrack(i)->GetKey(pPosTrack->GetSubTrack(i)->GetNumKeys()-1, &lastPosKey);
-			if (lastPosKey.m_time> posSubTrackMaxTime)
+			STrackKey lastPosKey;
+			SAnimTime posSubTrackMaxTime = 0.0f;
+			for (int i = 0; i < pPosTrack->GetSubTrackCount(); i++)
 			{
-				posSubTrackMaxTime = lastPosKey.m_time;
+				pPosTrack->GetSubTrack(i)->GetKey(pPosTrack->GetSubTrack(i)->GetNumKeys() - 1, &lastPosKey);
+				if (lastPosKey.m_time > posSubTrackMaxTime)
+				{
+					posSubTrackMaxTime = lastPosKey.m_time;
+				}
 			}
-		} 
-		if (animContext.time > posSubTrackMaxTime)
-		{
-			afterLastPosKey = true;
+			if (animContext.time > posSubTrackMaxTime)
+			{
+				afterLastPosKey = true;
+			}
 		}
 	}
 
