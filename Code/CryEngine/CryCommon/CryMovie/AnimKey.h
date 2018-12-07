@@ -410,6 +410,7 @@ struct SCharacterKey : public STimeRangeKey
 		, m_bBlendGap(false)
 		, m_bUnload(false)
 		, m_bInPlace(false)
+		, m_bReverse(false)
 	{
 		m_animation[0] = 0;
 	}
@@ -429,6 +430,7 @@ struct SCharacterKey : public STimeRangeKey
 		ar(m_bBlendGap, "blendGap", "Blend Gap");
 		ar(m_bUnload, "unload", "Unload");
 		ar(m_bInPlace, "inPlace", "In Place");
+		ar(m_bReverse, "reverse", "Play Reverse");
 	}
 
 	float GetMaxEndTime() const
@@ -469,6 +471,7 @@ struct SCharacterKey : public STimeRangeKey
 	bool  m_bBlendGap;     // True if gap to next animation should be blended
 	bool  m_bUnload;       // Unload after sequence is finished
 	bool  m_bInPlace;      // Play animation in place (Do not move root).
+	bool  m_bReverse;      // Play animation from end to start.
 };
 
 /** SMannequinKey used in Mannequin animation track.

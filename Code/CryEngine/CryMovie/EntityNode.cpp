@@ -3189,6 +3189,10 @@ void CAnimEntityNode::ApplyAnimKey(int32 keyIndex, class CCharacterTrack* track,
 			pCharacter->SetPlaybackScale(0.0000f);
 		}
 		float fNormalizedTime = t / duration;
+		if (key.m_bReverse)
+		{
+			fNormalizedTime = 1.0f - fNormalizedTime;
+		}
 		assert(fNormalizedTime >= 0.0f && fNormalizedTime <= 1.0f);
 		pCharacter->GetISkeletonAnim()->ManualSeekAnimationInFIFO(layer, animIndex, fNormalizedTime, bAnimEvents);
 		pCharacter->GetISkeletonAnim()->SetLayerNormalizedTime(layer, fNormalizedTime); 

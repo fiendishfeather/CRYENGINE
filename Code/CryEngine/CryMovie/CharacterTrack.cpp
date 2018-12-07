@@ -32,6 +32,7 @@ void CCharacterTrack::SerializeKey(SCharacterKey& key, XmlNodeRef& keyNode, bool
 		key.m_bLoop = false;
 		key.m_bBlendGap = false;
 		key.m_bInPlace = false;
+		key.m_bReverse = false;
 		key.m_speed = 1;
 
 		keyNode->getAttr("speed", key.m_speed);
@@ -39,6 +40,7 @@ void CCharacterTrack::SerializeKey(SCharacterKey& key, XmlNodeRef& keyNode, bool
 		keyNode->getAttr("blendGap", key.m_bBlendGap);
 		keyNode->getAttr("unload", key.m_bUnload);
 		keyNode->getAttr("inplace", key.m_bInPlace);
+		keyNode->getAttr("reverse", key.m_bReverse);
 		keyNode->getAttr("start", key.m_startTime);
 		keyNode->getAttr("end", key.m_endTime);
 	}
@@ -56,6 +58,8 @@ void CCharacterTrack::SerializeKey(SCharacterKey& key, XmlNodeRef& keyNode, bool
 			keyNode->setAttr("unload", key.m_bUnload);
 		if (key.m_bInPlace)
 			keyNode->setAttr("inplace", key.m_bInPlace);
+		if (key.m_bReverse)
+			keyNode->setAttr("reverse", key.m_bReverse);
 		if (key.m_startTime != 0.0f)
 			keyNode->setAttr("start", key.m_startTime);
 		if (key.m_endTime != 0.0f)
