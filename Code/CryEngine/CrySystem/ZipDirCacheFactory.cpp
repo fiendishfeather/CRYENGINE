@@ -993,6 +993,7 @@ void ZipDir::CacheFactory::AddFileEntry(char* strFilePath, const ZipFile::CDRFil
 	{
 		InitDataOffset(fileEntry, pFileHeader);
 	}
+	/////////////////
 	//data\\
 	//modify path string to save files from data folder in root
 
@@ -1009,12 +1010,21 @@ void ZipDir::CacheFactory::AddFileEntry(char* strFilePath, const ZipFile::CDRFil
 	}
 	//dont add data folder - string will be len 0 after prefix trim
 	if (newFilePath.length() == 0)return;
-
+	/////////////////
+	//preventing to load files from scripts folder
+	string path2 = string(newFilePath);
+	string prefix2 = path.substr(0, 12);
+	if (prefix2 == "data\\scripts")
+	{
+		return;
+	}
+	/////////////////
 	for (int i=0;i< newFilePath.length();i++)
 	{
 		strFilePath[i] = newFilePath[i];
 	}
 	strFilePath[newFilePath.length()] = '\0';
+	/////////////////
 
 	if (m_bBuildFileEntryMap)
 		m_mapFileEntries.insert(FileEntryMap::value_type(strFilePath, fileEntry));
