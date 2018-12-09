@@ -5215,7 +5215,7 @@ void CSystem::CreateSystemVars()
 	                                                     "Default: Localization\n",
 	                                                     CSystem::OnLocalizationFolderCVarChanged);
 
-	REGISTER_CVAR2("sys_streaming_in_blocks", &g_cvars.sys_streaming_in_blocks, 1, VF_NULL,
+	REGISTER_CVAR2("sys_streaming_in_blocks", &g_cvars.sys_streaming_in_blocks, 0, VF_NULL,
 	               "Streaming of large files happens in blocks");
 
 	REGISTER_CVAR2("sys_float_exceptions", &g_cvars.sys_float_exceptions, 0, 0,
