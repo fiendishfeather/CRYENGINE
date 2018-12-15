@@ -607,7 +607,7 @@ void MaterialHelpers::SetTexturesFromXml(SInputShaderResources& pShaderResources
 				CryLogAlways("MaterialHelpers::SetTexturesFromXml() | Tex pair for name %s not found. | %s -> %s", szTexmap, szBaseFileName, node->getAttr("Name"));
 			}
 		}
-		else if (!strcmp(node->getAttr("Shader"),"LayerBlend"))
+		else if ((!strcmp(node->getAttr("Shader"),"LayerBlend"))&&(node->findChild("MatReferences")))
 		{ 
 			texId = MaterialHelpers::FindSCTexSlotPair(szTexmap, "LayerBlend");
 			if (texId == EFTT_UNKNOWN)
