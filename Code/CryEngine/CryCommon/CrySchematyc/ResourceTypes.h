@@ -67,6 +67,15 @@ template<Serialization::ResourceSelector<string>(* SELECTOR)(string&)> inline bo
 }
 } // SerializationUtils
 
+typedef SerializationUtils::SResourceNameSelector<&Serialization::VehicleName<string>> VehicleName;
+
+inline void ReflectType(CTypeDesc<VehicleName>& desc)
+{
+	desc.SetGUID("{46059B75-325D-4C9E-8A3A-160CC0B65A3A}"_cry_guid);
+	desc.SetLabel("VehicleName");
+	desc.SetDescription("Vehicle file name");
+}
+
 typedef SerializationUtils::SResourceNameSelector<&Serialization::MaterialPicker<string>> MaterialFileName;
 
 inline void ReflectType(CTypeDesc<MaterialFileName>& desc)

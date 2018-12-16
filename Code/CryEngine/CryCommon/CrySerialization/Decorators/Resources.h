@@ -15,6 +15,8 @@ ResourceSelector<T> MakeResourceSelector(T& s, const char* selectorType)
 	return ResourceSelector<T>(s, selectorType);
 }
 
+//custom added
+template<class T> ResourceSelector<T> VehicleName(T& s)						 { return ResourceSelector<T>(s, "VehicleName"); }
 // animation resources
 template<class T> ResourceSelector<T> AnimationAlias(T& s)                   { return ResourceSelector<T>(s, "AnimationAlias"); } // "name" from animation set
 template<class T> ResourceSelector<T> AnimationPath(T& s)                    { return ResourceSelector<T>(s, "Animation"); }

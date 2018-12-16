@@ -301,12 +301,64 @@ static dll_string MannequinFragmentName(const SResourceSelectorContext& context,
 	return "";
 }
 
+dll_string VehicleFileNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
+{
+	//list all files from Scripts/Entities/Vehicles/Implementations/Xml
+	Serialization::StringListStatic names; 
+
+	string vehiclesFolder = string(PathUtil::GetGameFolder()) + "/Scripts/Entities/Vehicles/Implementations/Xml/*.xml";
+	const char* pWildcardIn = vehiclesFolder.c_str();
+	char cWorkBuf[255];
+	gEnv->pCryPak->AdjustFileName(pWildcardIn, cWorkBuf, ICryPak::EPathResolutionRules::FLAGS_COPY_DEST_ALWAYS);
+
+	char* cWork = cWorkBuf;
+
+	_finddata_t fd;
+	intptr_t h = gEnv->pCryPak->FindFirst(cWork, &fd, ICryPak::EPathResolutionRules::FLAGS_PATH_REAL, /*bAllOwUseFileSystem =*/ true);
+
+	char cWildcardFullPath[MAX_PATH];
+	cry_sprintf(cWildcardFullPath, "*.%s", PathUtil::GetExt(pWildcardIn));
+
+	char* pDestName = strrchr(cWork, '\\');
+	if (!pDestName)
+		pDestName = cWork;
+	else
+		++pDestName;
+	if (h != -1)
+	{
+		std::vector<string> files;
+		do
+		{
+			strcpy(pDestName, fd.name);
+			if (PathUtil::MatchWildcard(cWork, cWildcardFullPath))
+			{
+				string buffer(PathUtil::GetFileName( strlwr(cWork)));
+				names.push_back(buffer);
+			}
+		} while (gEnv->pCryPak->FindNext(h, &fd) >= 0);
+
+		CrySchematycEditor::CStringListDictionary dict(names);
+		CModalPopupDictionary dictionary("Vehicle", dict);
+
+		const QPoint pos = QCursor::pos();
+		dictionary.ExecAt(pos);
+
+		CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
+		if (pEntry)
+		{
+			return QtUtil::ToString(pEntry->GetName()).c_str();
+		}
+	}
+	return "";
+}
+
 REGISTER_RESOURCE_SELECTOR("EntityClass", EntityClassNameSelector, "")
 REGISTER_RESOURCE_SELECTOR("ActionMap", ActionMapNameSelector, "")
 REGISTER_RESOURCE_SELECTOR("ActionMapAction", ActionMapActionNameSelector, "")
 REGISTER_RESOURCE_SELECTOR("SurfaceTypeName", SurfaceTypeNameSelector, "")
 REGISTER_RESOURCE_SELECTOR("MannequinScopeContextName", MannequinScopeContextName, "")
 REGISTER_RESOURCE_SELECTOR("MannequinFragmentName", MannequinFragmentName, "")
+REGISTER_RESOURCE_SELECTOR("VehicleName", VehicleFileNameSelector, "")
 }
 
 namespace CrySchematycEditor {
