@@ -17,6 +17,11 @@ ResourceSelector<T> MakeResourceSelector(T& s, const char* selectorType)
 
 //custom added
 template<class T> ResourceSelector<T> VehicleName(T& s)						 { return ResourceSelector<T>(s, "VehicleName"); }
+template<class T> ResourceSelector<T> VehicleModificationName(T& s)			 { return ResourceSelector<T>(s, "VehicleModificationName"); }
+template<class T> ResourceSelector<T> VehicleLoadoutName(T& s)				 { return ResourceSelector<T>(s, "VehicleLoadoutName"); }
+template<class T> ResourceSelector<T> PlayerLoadoutName(T& s)				 { return ResourceSelector<T>(s, "PlayerLoadoutName"); }
+template<class T> ResourceSelector<T> CharacterLoadoutName(T& s)			 { return ResourceSelector<T>(s, "CharacterLoadoutName"); }
+template<class T> ResourceSelector<T> PlayerCharacterLoadoutName(T& s)		 { return ResourceSelector<T>(s, "PlayerCharacterLoadoutName"); } //both player and character loadout in one selector
 // animation resources
 template<class T> ResourceSelector<T> AnimationAlias(T& s)                   { return ResourceSelector<T>(s, "AnimationAlias"); } // "name" from animation set
 template<class T> ResourceSelector<T> AnimationPath(T& s)                    { return ResourceSelector<T>(s, "Animation"); }

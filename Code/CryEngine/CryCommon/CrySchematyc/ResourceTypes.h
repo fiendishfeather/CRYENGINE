@@ -76,6 +76,51 @@ inline void ReflectType(CTypeDesc<VehicleName>& desc)
 	desc.SetDescription("Vehicle file name");
 }
 
+typedef SerializationUtils::SResourceNameSelector<&Serialization::VehicleModificationName<string>> VehicleModificationName;
+
+inline void ReflectType(CTypeDesc<VehicleModificationName>& desc)
+{
+	desc.SetGUID("{B8B878B7-EDF9-4360-BB82-1DC461713CE2}"_cry_guid);
+	desc.SetLabel("VehicleModificationName");
+	desc.SetDescription("Vehicle Modification file name");
+}
+
+typedef SerializationUtils::SResourceNameSelector<&Serialization::VehicleLoadoutName<string>> VehicleLoadoutName;
+
+inline void ReflectType(CTypeDesc<VehicleLoadoutName>& desc)
+{
+	desc.SetGUID("{D707A3F4-8CC4-458F-95D1-2C727C30D6EA}"_cry_guid);
+	desc.SetLabel("VehicleLoadoutName");
+	desc.SetDescription("Vehicle Loadout file name");
+}
+
+typedef SerializationUtils::SResourceNameSelector<&Serialization::PlayerLoadoutName<string>> PlayerLoadoutName;
+
+inline void ReflectType(CTypeDesc<PlayerLoadoutName>& desc)
+{
+	desc.SetGUID("{F2FFBBD7-9077-429D-A093-9C633E205072}"_cry_guid);
+	desc.SetLabel("PlayerLoadoutName");
+	desc.SetDescription("Player Loadout file name");
+}
+
+typedef SerializationUtils::SResourceNameSelector<&Serialization::CharacterLoadoutName<string>> CharacterLoadoutName;
+
+inline void ReflectType(CTypeDesc<CharacterLoadoutName>& desc)
+{
+	desc.SetGUID("{BB9007DD-2DCE-4C1E-BD1D-B2E067191387}"_cry_guid);
+	desc.SetLabel("CharacterLoadoutName");
+	desc.SetDescription("Character Loadout file name");
+}
+
+typedef SerializationUtils::SResourceNameSelector<&Serialization::PlayerCharacterLoadoutName<string>> PlayerCharacterLoadoutName;
+
+inline void ReflectType(CTypeDesc<PlayerCharacterLoadoutName>& desc)
+{
+	desc.SetGUID("{3FCE9413-AD06-47C1-9BD5-D349580B6F9F}"_cry_guid);
+	desc.SetLabel("PlayerCharacterLoadoutName");
+	desc.SetDescription("Character or Player Loadout file name");
+}
+
 typedef SerializationUtils::SResourceNameSelector<&Serialization::MaterialPicker<string>> MaterialFileName;
 
 inline void ReflectType(CTypeDesc<MaterialFileName>& desc)
