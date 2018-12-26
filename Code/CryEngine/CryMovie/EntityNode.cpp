@@ -1711,10 +1711,13 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 			SAnimTime posSubTrackMaxTime = 0.0f;
 			for (int i = 0; i < pPosTrack->GetSubTrackCount(); i++)
 			{
-				pPosTrack->GetSubTrack(i)->GetKey(pPosTrack->GetSubTrack(i)->GetNumKeys() - 1, &lastPosKey);
-				if (lastPosKey.m_time > posSubTrackMaxTime)
+				if (pPosTrack->GetSubTrack(i)->GetNumKeys() > 0)
 				{
-					posSubTrackMaxTime = lastPosKey.m_time;
+					pPosTrack->GetSubTrack(i)->GetKey(pPosTrack->GetSubTrack(i)->GetNumKeys() - 1, &lastPosKey);
+					if (lastPosKey.m_time > posSubTrackMaxTime)
+					{
+						posSubTrackMaxTime = lastPosKey.m_time;
+					}
 				}
 			}
 			if (animContext.time > posSubTrackMaxTime)
