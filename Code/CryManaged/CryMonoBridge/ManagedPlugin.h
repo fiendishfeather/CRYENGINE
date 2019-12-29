@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
@@ -11,6 +11,7 @@
 #include "NativeComponents/EntityComponentFactory.h"
 
 #include <CrySchematyc/CoreAPI.h>
+#include <CryMono/IMonoRuntime.h>
 
 class CMonoLibrary;
 
@@ -50,6 +51,7 @@ public:
 	virtual void OnCoreLibrariesDeserialized() override;
 	virtual void OnPluginLibrariesDeserialized() override;
 	virtual void SetLoadIndex(int i) override { m_loadIndex = i; }
+	virtual void Shutdown() override;
 	// ~IManagedPlugin
 
 	// ICryUnknown
@@ -102,6 +104,9 @@ protected:
 	CryGUID m_guid;
 
 	int m_loadIndex = -1;
+
+private:
+	bool m_wasShutdown = false;
 
 	// Map containing entity component factories for this module
 	std::vector<std::shared_ptr<CManagedEntityComponentFactory>> m_entityComponentFactories;

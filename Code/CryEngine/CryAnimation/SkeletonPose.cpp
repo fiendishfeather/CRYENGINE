@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "stdafx.h"
 #include "SkeletonPose.h"
@@ -25,6 +25,7 @@ CSkeletonPose::CSkeletonPose()
 	, m_AABB(2.0f)
 	, m_bInstanceVisible(false)
 	, m_bFullSkeletonUpdate(false)
+	, m_bVisibleLastFrame(false)
 	, m_bAllNodesValid(0)
 	, m_bSetDefaultPoseExecute(false)
 	, m_pSkeletonAnim(nullptr)
@@ -109,6 +110,8 @@ bool CSkeletonPose::PreparePoseDataAndLocatorWriteables(Memory::CPool& memoryPoo
 
 void CSkeletonPose::SynchronizePoseDataAndLocatorWriteables()
 {
+	DEFINE_PROFILER_FUNCTION();
+
 	if (m_pPoseDataWriteable)
 	{
 		m_pInstance->WaitForSkinningJob();
@@ -222,9 +225,8 @@ void CSkeletonPose::InitCGASkeleton()
 
 const IStatObj* CSkeletonPose::GetStatObjOnJoint(int32 nId) const
 {
-	if (nId < 0 || nId >= (int)GetPoseDataDefault().GetJointCount())
+	if (!CRY_VERIFY(nId >= 0 && nId < (int)GetPoseDataDefault().GetJointCount()))
 	{
-		assert(0);
 		return NULL;
 	}
 	if (m_arrCGAJoints.size())
@@ -244,13 +246,12 @@ IStatObj* CSkeletonPose::GetStatObjOnJoint(int32 nId)
 
 void CSkeletonPose::SetStatObjOnJoint(int32 nId, IStatObj* pStatObj)
 {
-	if (nId < 0 || nId >= (int)GetPoseDataDefault().GetJointCount())
+	if (!CRY_VERIFY(nId >= 0 && nId < (int)GetPoseDataDefault().GetJointCount()))
 	{
-		assert(0);
 		return;
 	}
 
-	assert(m_arrCGAJoints.size());
+	CRY_ASSERT(m_arrCGAJoints.size());
 	// do not handle physicalization in here, use IEntity->SetStatObj instead
 	CCGAJoint& joint = m_arrCGAJoints[nId];
 	joint.m_CGAObjectInstance = pStatObj;
@@ -264,7 +265,7 @@ uint32 CSkeletonPose::SetHumanLimbIK(const Vec3& vWorldPos, const char* strLimb)
 	if (!m_limbIk.get())
 	{
 		CryCreateClassInstance<IAnimationPoseModifier>(CLimbIk::GetCID(), m_limbIk);
-		assert(m_limbIk.get());
+		CRY_ASSERT(m_limbIk.get());
 	}
 
 	Vec3 targetPositionLocal = m_pInstance->m_location.GetInverted() * vWorldPos;
@@ -285,7 +286,7 @@ void CSkeletonPose::ApplyRecoilAnimation(f32 fDuration, f32 fKinematicImpact, f3
 	{
 		CryCreateClassInstance<IAnimationPoseModifier>(PoseModifier::CRecoil::GetCID(), m_recoil);
 		pRecoil = static_cast<PoseModifier::CRecoil*>(m_recoil.get());
-		assert(pRecoil);
+		CRY_ASSERT(pRecoil);
 	}
 
 	PoseModifier::CRecoil::State state;

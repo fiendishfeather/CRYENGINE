@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "EntityNode.h"
@@ -26,6 +26,7 @@
 #include <CryAISystem/IAIObject.h>
 #include <CryAISystem/IAIActor.h>
 #include <CryGame/IGameFramework.h>
+#include <CrySystem/ConsoleRegistration.h>
 
 #include <../CryAction/IActorSystem.h>
 #define HEAD_BONE_NAME "Bip01 Head"
@@ -194,7 +195,6 @@ void CAnimEntityNode::Initialize()
 		AddSupportedParam(g_nodeParams, "Visibility", eAnimParamType_Visibility, eAnimValue_Bool);
 		AddSupportedParam(g_nodeParams, "Event", eAnimParamType_Event, eAnimValue_Unknown);
 		AddSupportedParam(g_nodeParams, "Audio/Trigger", eAnimParamType_AudioTrigger, eAnimValue_Unknown, eSupportedParamFlags_MultipleTracks);
-		AddSupportedParam(g_nodeParams, "Audio/File", eAnimParamType_AudioFile, eAnimValue_Unknown, eSupportedParamFlags_MultipleTracks);
 		AddSupportedParam(g_nodeParams, "Audio/Parameter", eAnimParamType_AudioParameter, eAnimValue_Float, eSupportedParamFlags_MultipleTracks);
 		AddSupportedParam(g_nodeParams, "Audio/Switch", eAnimParamType_AudioSwitch, eAnimValue_Unknown, eSupportedParamFlags_MultipleTracks);
 		AddSupportedParam(g_nodeParams, "Dynamic Response Signal", eAnimParamType_DynamicResponseSignal, eAnimValue_Unknown, eSupportedParamFlags_MultipleTracks);
@@ -554,7 +554,7 @@ void CAnimEntityNode::UpdateDynamicParams_PureGame()
 			if (propertyScriptTable && !propertyName.empty())
 			{
 				SScriptPropertyParamInfo paramInfo;
-				bool isUnknownTable = ObtainPropertyTypeInfo(propertyName.c_str(), propertyScriptTable, paramInfo);
+				ObtainPropertyTypeInfo(propertyName.c_str(), propertyScriptTable, paramInfo);
 
 				if (paramInfo.animNodeParamInfo.valueType == eAnimValue_Unknown)
 				{
@@ -1055,11 +1055,13 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 
 	int animCharacterLayer = 0;
 	int animationTrack = 0;
-	size_t numAudioFileTracks = 0;
 	size_t numAudioSwitchTracks = 0;
 	size_t numAudioTriggerTracks = 0;
 	size_t numAudioParameterTracks = 0;
 	const int trackCount = NumTracks();
+
+	const float PosEpsilon = 0.0001f;
+	const float RotEpsilon = DEG2RAD(0.0001f);
 
 	for (int paramIndex = 0; paramIndex < trackCount; paramIndex++)
 	{
@@ -1084,14 +1086,14 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 			{
 				pos = stl::get<Vec3>(pPosTrack->GetValue(animContext.time));
 
-				if (!IsEquivalent(pos, GetPos(), 0.0001f))
+				if (!IsEquivalent(pos, GetPos(), PosEpsilon) || !IsEquivalent(pos, pEntity->GetPos(), PosEpsilon))
 				{
 					entityUpdateFlags |= eUpdateEntity_Position;
 				}
 			}
 			else
 			{
-				if (!IsEquivalent(pos, GetPos(), 0.0001f))
+				if (!IsEquivalent(pos, GetPos(), PosEpsilon) || !IsEquivalent(pos, pEntity->GetPos(), PosEpsilon))
 				{
 					entityUpdateFlags |= eUpdateEntity_Position;
 					pos = m_vInterpPos;
@@ -1107,14 +1109,14 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 			{
 				rotate = stl::get<Quat>(pRotTrack->GetValue(animContext.time));
 
-				if (!CompareRotation(rotate, GetRotate(), DEG2RAD(0.0001f)))
+				if (!CompareRotation(rotate, GetRotate(), RotEpsilon) || !CompareRotation(rotate, pEntity->GetRotation(), RotEpsilon))
 				{
 					entityUpdateFlags |= eUpdateEntity_Rotation;
 				}
 			}
 			else
 			{
-				if (!CompareRotation(rotate, GetRotate(), DEG2RAD(0.0001f)))
+				if (!CompareRotation(rotate, GetRotate(), RotEpsilon) || !CompareRotation(rotate, pEntity->GetRotation(), RotEpsilon))
 				{
 					entityUpdateFlags |= eUpdateEntity_Rotation;
 					rotate = m_interpRot;
@@ -1301,51 +1303,6 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 				break;
 			}
 
-		case eAnimParamType_AudioFile:
-			{
-				++numAudioFileTracks;
-
-				if (numAudioFileTracks > m_audioFileTracks.size())
-				{
-					m_audioFileTracks.resize(numAudioFileTracks);
-				}
-
-				if (!animContext.bResetting && !bMute)
-				{
-					SAudioFileKey audioFileKey;
-					SAudioInfo& audioFileInfo = m_audioFileTracks[numAudioFileTracks - 1];
-					CAudioFileTrack* pAudioFileTrack = static_cast<CAudioFileTrack*>(pTrack);
-					const int audioFileKeyNum = pAudioFileTrack->GetActiveKey(animContext.time, &audioFileKey);
-					if (pEntity && audioFileKeyNum >= 0 && audioFileKey.m_duration > SAnimTime(0) && !(audioFileKey.m_bNoTriggerInScrubbing && animContext.bSingleFrame))
-					{
-						const SAnimTime audioKeyTime = (animContext.time - audioFileKey.m_time);
-						if (animContext.time <= audioFileKey.m_time + audioFileKey.m_duration)
-						{
-							if (audioFileInfo.audioKeyStart < audioFileKeyNum)
-							{
-								IEntityAudioComponent* pIEntityAudioComponent = pEntity->GetOrCreateComponent<IEntityAudioComponent>();
-								if (pIEntityAudioComponent)
-								{
-									const CryAudio::SPlayFileInfo audioPlayFileInfo(audioFileKey.m_audioFile, audioFileKey.m_bIsLocalized);
-									pIEntityAudioComponent->PlayFile(audioPlayFileInfo);
-								}
-							}
-							audioFileInfo.audioKeyStart = audioFileKeyNum;
-						}
-						else if (audioKeyTime >= audioFileKey.m_duration)
-						{
-							audioFileInfo.audioKeyStart = -1;
-						}
-					}
-					else
-					{
-						audioFileInfo.audioKeyStart = -1;
-					}
-				}
-
-				break;
-			}
-
 		case eAnimParamType_AudioParameter:
 			{
 				++numAudioParameterTracks;
@@ -1491,8 +1448,6 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 
 				if (key >= 0)
 				{
-					int breakhere = 0;
-
 					//Only activate once
 					if (m_iCurMannequinKey != key)
 					{
@@ -1505,8 +1460,6 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 							if (pAnimChar)
 							{
 								const FragmentID fragID = pAnimChar->GetActionController()->GetContext().controllerDef.m_fragmentIDs.Find(valueName);
-
-								bool isValid = !(FRAGMENT_ID_INVALID == fragID);
 
 								// Find tags
 								string tagName = manKey.m_tags;
@@ -1537,8 +1490,6 @@ void CAnimEntityNode::Animate(SAnimContext& animContext)
 
 										if (!found)
 										{
-											const TagID tagID = pAnimChar->GetActionController()->GetContext().state.GetDef().Find(curTagName);
-
 											if (tagDefinition)
 											{
 												const int tagCRC = CCrc32::ComputeLowercase(curTagName);
@@ -1881,7 +1832,6 @@ void CAnimEntityNode::OnReset()
 	m_lookPose = "";
 	StopAudio();
 	ReleaseAllAnims();
-	UpdateDynamicParams();
 
 	//FIEND: Originally 2, Added up to 10
 	m_baseAnimState.m_layerPlaysAnimation[0] = m_baseAnimState.m_layerPlaysAnimation[1] = m_baseAnimState.m_layerPlaysAnimation[2] =
@@ -1891,7 +1841,14 @@ void CAnimEntityNode::OnReset()
 
 	if (m_pOwner)
 	{
-		m_pOwner->OnNodeReset(this);
+		if (m_pOwner->OnNodeReset(this))
+		{
+			UpdateDynamicParams();
+		}
+	}
+	else
+	{
+		UpdateDynamicParams();
 	}
 }
 
@@ -2078,7 +2035,7 @@ void CAnimEntityNode::Activate(bool bActivate)
 
 void CAnimEntityNode::OnStart()
 {
-	CRY_ASSERT_MESSAGE(m_activeAudioTriggers.empty(), "m_activeAudioTriggers is not empty during CAnimEntityNode::OnStart");
+	CRY_ASSERT(m_activeAudioTriggers.empty(), "m_activeAudioTriggers is not empty during CAnimEntityNode::OnStart");
 
 	m_bIsAnimDriven = false;
 
@@ -2269,8 +2226,12 @@ void CAnimEntityNode::ApplyEventKey(CEventTrack* track, int keyIndex, SEventKey&
 				{
 					Vec3 vTemp(0, 0, 0);
 					float x = 0, y = 0, z = 0;
+#if defined(USE_CRY_ASSERT)
 					int res = sscanf(key.m_eventValue, "%f,%f,%f", &x, &y, &z);
 					assert(res == 3);
+#else
+					sscanf(key.m_eventValue, "%f,%f,%f", &x, &y, &z);
+#endif
 					vTemp(x, y, z);
 					pScriptProxy->CallEvent(key.m_event, vTemp);
 				}
@@ -2323,13 +2284,10 @@ void CAnimEntityNode::ReleaseAllAnims()
 		return;
 	}
 
+#if defined(USE_CRY_ASSERT)
 	IAnimationSet* pAnimations = pCharacter->GetIAnimationSet();
 	assert(pAnimations);
-
-	for (TStringSetIt It = m_setAnimationSinks.begin(); It != m_setAnimationSinks.end(); ++It)
-	{
-		const char* pszName = (*It).c_str();
-	}
+#endif
 
 	m_setAnimationSinks.clear();
 
@@ -2388,8 +2346,10 @@ void CAnimEntityNode::OnEndAnimation(const char* sAnimation)
 		return;
 	}
 
+#if defined(USE_CRY_ASSERT)
 	IAnimationSet* pAnimations = pCharacter->GetIAnimationSet();
 	assert(pAnimations);
+#endif
 }
 
 // return active keys ( maximum: 2 in case of overlap ) in the right order
@@ -2516,10 +2476,6 @@ static bool HaveKeysChanged(int32 activeKeys[], int32 previousKeys[])
 
 void CAnimEntityNode::AnimateCharacterTrack(class CCharacterTrack* pTrack, SAnimContext& animContext, int layer, int trackIndex, SAnimState& animState, IEntity* pEntity, ICharacterInstance* pCharacter)
 {
-	ISystem* pISystem = GetISystem();
-	IRenderer* pIRenderer = gEnv->pRenderer;
-	IRenderAuxGeom* pAuxGeom = pIRenderer->GetIRenderAuxGeom();
-
 	pTrack->GetActiveKey(animContext.time, 0);  // To sort keys
 
 	int32 activeKeys[2] = { -1, -1 };
@@ -2563,10 +2519,6 @@ void CAnimEntityNode::AnimateCharacterTrack(class CCharacterTrack* pTrack, SAnim
 
 			if (key.m_animation[0])
 			{
-				// retrieve the animation collection for the model
-				IAnimationSet* pAnimations = pCharacter->GetIAnimationSet();
-				assert(pAnimations);
-
 				if (key.m_bUnload)
 				{
 					m_setAnimationSinks.insert(TStringSetIt::value_type(key.m_animation));
@@ -2598,19 +2550,6 @@ void CAnimEntityNode::AnimateCharacterTrack(class CCharacterTrack* pTrack, SAnim
 
 				animState.m_layerPlaysAnimation[trackIndex] = true;
 
-				// fix duration?
-				int animId = pAnimations->GetAnimIDByName(key.m_animation);
-
-				if (animId >= 0)
-				{
-					float duration = pAnimations->GetDuration_sec(animId);
-
-					if (key.m_defaultAnimDuration != duration)
-					{
-						key.m_defaultAnimDuration = duration;
-						pTrack->SetKey(k, &key);
-					}
-				}
 			}
 		}
 

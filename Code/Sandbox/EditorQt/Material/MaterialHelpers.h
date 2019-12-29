@@ -1,9 +1,10 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
 #include "Material.h"
 #include "IEditorImpl.h"
+#include <Cry3DEngine/I3DEngine.h>
 
 namespace MaterialHelpers
 {
@@ -62,4 +63,3 @@ inline void MigrateXmlLegacyData(SInputShaderResources& pShaderResources, const 
 inline void       ConvertSCData(SInputShaderResources& pShaderResources, const XmlNodeRef& node) { GetIEditorImpl()->Get3DEngine()->GetMaterialHelpers().ConvertSCData(pShaderResources, node); }
 inline XmlNodeRef SCSetPublicParams(const XmlNodeRef& node) { return GetIEditorImpl()->Get3DEngine()->GetMaterialHelpers().SCSetPublicParams(node); }
 }
-

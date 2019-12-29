@@ -1,4 +1,5 @@
 #pragma once
+#include <CryEntitySystem/IEntityComponent.h>
 
 struct ICameraComponent : public IEntityComponent
 {
@@ -6,8 +7,6 @@ struct ICameraComponent : public IEntityComponent
 	{
 		desc.SetGUID("{42D1F269-CED6-4504-8092-1651B7645594}"_cry_guid);
 	}
-
-	virtual void DisableAudioListener() = 0;
 };
 
 class ICameraManager

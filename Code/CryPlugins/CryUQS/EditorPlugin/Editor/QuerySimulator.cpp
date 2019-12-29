@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "QuerySimulator.h"
@@ -47,9 +47,9 @@ CSimulatedRuntimeParam& CSimulatedRuntimeParam::operator=(const CSimulatedRuntim
 {
 	if (this != &rhs)
 	{
-		assert(m_pItemFactory);
-		assert(rhs.m_pItemFactory);
-		assert(rhs.m_pItem);
+		CRY_ASSERT(m_pItemFactory);
+		CRY_ASSERT(rhs.m_pItemFactory);
+		CRY_ASSERT(rhs.m_pItem);
 
 		m_name = rhs.m_name;
 		m_pItemFactory->DestroyItems(m_pItem);
@@ -88,7 +88,7 @@ CSimulatedRuntimeParam::~CSimulatedRuntimeParam()
 
 bool CSimulatedRuntimeParam::Serialize(Serialization::IArchive& archive)
 {
-	//assert(m_pItemFactory);
+	//CRY_ASSERT(m_pItemFactory);
 
 	// happens when yasli uses a temporary object during its serialization
 	if (!m_pItemFactory)
@@ -117,7 +117,7 @@ bool CSimulatedRuntimeParam::Serialize(Serialization::IArchive& archive)
 	}
 	else
 	{
-		assert(archive.isInput());
+		CRY_ASSERT(archive.isInput());
 		return m_pItemFactory->TryDeserializeItem(m_pItem, archive, "value", m_name.c_str());
 	}
 }
@@ -160,9 +160,16 @@ CQuerySimulator::CQuerySimulator()
 	m_queryHost.SetCallback(functor(*this, &CQuerySimulator::OnQueryHostFinished));
 	m_queryHost.SetQuerierName("QuerySimulator");
 
-	// instantiate the CUQSHistoryPostRenderer on the heap - it's IPostRenderer is refcounted and deletes itself when un-registering from the game's viewport
-	m_pHistoryPostRenderer = new CUQSHistoryPostRenderer;
-	GetIEditor()->GetViewportManager()->GetGameViewport()->AddPostRenderer(m_pHistoryPostRenderer);	// this increments its refcount
+	if (CViewport* pGameViewport = GetIEditor()->GetViewportManager()->GetGameViewport())
+	{
+		// instantiate the CUQSHistoryPostRenderer on the heap - it's IPostRenderer is refcounted and deletes itself when un-registering from the game's viewport
+		m_pHistoryPostRenderer = new CUQSHistoryPostRenderer;
+		pGameViewport->AddPostRenderer(m_pHistoryPostRenderer);	// this increments its refcount
+	}
+	else
+	{
+		CryWarning(VALIDATOR_MODULE_GAME, VALIDATOR_ERROR, "UQS Editor needs a Viewport window to render UQS Primitives. If you wish to render UQS primitives, close the UQS Editor, open a new Viewport, and open the UQS Editor again.");
+	}
 }
 
 CQuerySimulator::~CQuerySimulator()

@@ -1,9 +1,9 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 
 #include "SkeletonInfo.h"
-#include "../CryEngine/Cry3DEngine/CGF/CGFLoader.h"
+#include "CGF/CGFLoader.h"
 #include "CGF/CGFSaver.h"
 #include "CGA/SkeletonHelpers.h"
 
@@ -19,7 +19,7 @@ struct RCLoaderCGFListener : ILoaderCGFListener
 
 	virtual void Error( const char *format )
 	{
-		RCLogError(format);
+		RCLogWarning(format);
 	}
 };
 }
@@ -34,7 +34,6 @@ CSkeletonInfo::~CSkeletonInfo()
 {
 }
 
-
 bool CSkeletonInfo::LoadFromChr(const char * name)
 {
 	RCLoaderCGFListener listener;
@@ -45,7 +44,7 @@ bool CSkeletonInfo::LoadFromChr(const char * name)
 	pCGF.reset(cgfLoader.LoadCGF( name,chunkFile,&listener ));
 	if (!pCGF.get())
 	{
-		RCLogError( "%s: Failed to load geometry file %s - %s",__FUNCTION__,name,cgfLoader.GetLastError() );
+		RCLogWarning( "%s: Failed to load geometry file %s - %s",__FUNCTION__,name,cgfLoader.GetLastError() );
 		return false;
 	}
 
@@ -54,7 +53,6 @@ bool CSkeletonInfo::LoadFromChr(const char * name)
 
 	return true;
 }
-
 
 bool CSkeletonInfo::LoadFromCga(const char * name)
 {

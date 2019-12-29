@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 //
 //	File:Cry_Math.h
@@ -32,7 +32,7 @@
 
 //! Only enable math asserts in debug builds
 #if defined(_DEBUG)
-	#define CRY_MATH_ASSERT(x) CRY_ASSERT_MESSAGE(x, "CRY_MATH_ASSERT")
+	#define CRY_MATH_ASSERT(x) CRY_ASSERT(x, "CRY_MATH_ASSERT")
 #else
 	#define CRY_MATH_ASSERT(x)
 #endif
@@ -167,8 +167,9 @@ using std::floor;
 using std::ceil;
 using std::trunc;
 
-template<typename T> ILINE T clamp(T val, T lo, T hi) { return min(max(val, lo), hi); }
-template<typename T> ILINE T saturate(T val)          { return clamp(val, convert<T>(0.0f), convert<T>(1.0f)); }
+template<typename T>             ILINE T clamp   (T val, T lo, T hi) { return min(max(val, lo), hi); }
+template<typename R, typename T> ILINE R clamp_to(T val, T lo, T hi) { return R(clamp(val, lo, hi)); }
+template<typename T>             ILINE T saturate(T val)             { return clamp(val, convert<T>(0.0f), convert<T>(1.0f)); }
 
 //
 // Mathematical functions
@@ -187,7 +188,6 @@ using std::atan2;
 template<typename T> ILINE void sincos(T angle, T* pSin, T* pCos) { *pSin = sin(angle); *pCos = cos(angle); }
 
 using std::exp;
-using std::exp;
 using std::log;
 using std::pow;
 using std::sqrt;
@@ -196,7 +196,8 @@ using std::sqrt;
 // Define rcp, rsqrt, etc for different platforms.
 //
 
-#if CRY_PLATFORM_SSE2
+// _MSC_VER check is a temporary workaround for apparent compiler bug in VS 16.3: SSE version of rsqrt_fast generates incorrect code
+#if CRY_PLATFORM_SSE2 && (!defined(_MSC_VER) || _MSC_VER < 1923)
 
 ILINE f32 rcp_fast(f32 op)   { return _mm_cvtss_f32(_mm_rcp_ss(_mm_set_ss(op))); }
 ILINE f32 rcp(f32 op)        { float r = rcp_fast(op); return r * (2.0f - op * r); }
@@ -530,13 +531,13 @@ ILINE int32 iszero(f64 x)
 	return -((u.i >> 31) ^ (u.i - 1) >> 31);
 }
 ILINE int32 iszero(int32 x)   { return -(x >> 31 ^ (x - 1) >> 31); }
-#if CRY_PLATFORM_64BIT && !defined(__clang__)
+#if !CRY_COMPILER_CLANG
 ILINE int64 iszero(__int64 x) { return -(x >> 63 ^ (x - 1) >> 63); }
 #endif
-#if CRY_PLATFORM_64BIT && defined(__clang__) && !CRY_PLATFORM_LINUX && !CRY_PLATFORM_ANDROID
+#if CRY_COMPILER_CLANG && !CRY_PLATFORM_LINUX && !CRY_PLATFORM_ANDROID
 ILINE int64 iszero(int64_t x) { return -(x >> 63 ^ (x - 1) >> 63); }
 #endif
-#if CRY_PLATFORM_64BIT && (CRY_PLATFORM_LINUX || CRY_PLATFORM_ANDROID || CRY_PLATFORM_APPLE)
+#if (CRY_PLATFORM_LINUX || CRY_PLATFORM_ANDROID || CRY_PLATFORM_APPLE)
 ILINE int64 iszero(long int x) { return -(x >> 63 ^ (x - 1) >> 63); }
 #endif
 
@@ -639,7 +640,7 @@ template<typename T> ILINE void SmoothCD(
 	else
 	{
 		val = to;
-		valRate -= valRate; // zero it...
+		valRate = (T)(valRate - valRate); // zero it...
 	}
 }
 
@@ -679,7 +680,7 @@ template<typename T> ILINE void SmoothCDWithMaxRate(
 	else
 	{
 		val = to;
-		valRate -= valRate; // zero it...
+		valRate = (T)(valRate - valRate); // zero it...
 	}
 }
 #pragma warning(pop)

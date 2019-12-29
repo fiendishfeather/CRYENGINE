@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 
@@ -10,6 +10,7 @@
 #include <CryEntitySystem/IEntityClass.h>
 #include <CryEntitySystem/IEntitySystem.h>
 #include <Cry3DEngine/I3DEngine.h>
+#include <Cry3DEngine/ISurfaceType.h>
 #include <CryGame/IGameFramework.h>
 #include <CryString/CryStringUtils.h>
 #include <CrySchematyc/Utils/Assert.h>
@@ -71,10 +72,11 @@ public:
 	virtual ~CStringListDictionary() {}
 
 	// CryGraphEditor::CAbstractDictionary
+	virtual void                            ResetEntries() override              { m_func(); }
 	virtual int32                           GetNumEntries() const override       { return m_names.size(); }
 	virtual const CAbstractDictionaryEntry* GetEntry(int32 index) const override { return (m_names.size() > index) ? &m_names[index] : nullptr; }
 
-	virtual int32                           GetNumColumns() const override       { return Column_COUNT; };
+	virtual int32                           GetNumColumns() const override       { return Column_COUNT; }
 	virtual QString                         GetColumnName(int32 index) const override
 	{
 		if (index == Column_Name)
@@ -85,27 +87,25 @@ public:
 	virtual int32 GetDefaultFilterColumn() const override { return Column_Name; }
 	// ~CryGraphEditor::CAbstractDictionary
 
-	void Load(const Serialization::StringListStatic& names)
+	template<class StringList> void Load(const StringList& names)
 	{
-		for (string name : names)
-		{
-			CStringListDictionaryEntry entry;
-			entry.m_name = name;
-			m_names.emplace_back(entry);
-		}
-	}
+		m_func = std::bind([this, names]()
+			{
+				for (string name : names)
+				{
+				  CStringListDictionaryEntry entry;
+				  entry.m_name = name;
+				  m_names.emplace_back(entry);
+				}
+			});
 
-	void Load(const Serialization::StringList& names)
-	{
-		for (string name : names)
-		{
-			CStringListDictionaryEntry entry;
-			entry.m_name = name;
-			m_names.emplace_back(entry);
-		}
+		Reset();
+
+		m_func = std::bind([]() {});
 	}
 
 private:
+	std::function<void()>                   m_func;
 	std::vector<CStringListDictionaryEntry> m_names;
 };
 
@@ -138,45 +138,7 @@ private:
 
 namespace {
 
-//Helpers
-void SearchFilesInFolder(string folderPath, Serialization::StringListStatic &names)
-{
-	//string vehiclesFolder = string(PathUtil::GetGameFolder()) + "/Scripts/Entities/Vehicles/Implementations/Xml/*.xml";
-	string vehiclesFolder = folderPath;
-	const char* pWildcardIn = vehiclesFolder.c_str();
-	char cWorkBuf[255];
-	gEnv->pCryPak->AdjustFileName(pWildcardIn, cWorkBuf, ICryPak::EPathResolutionRules::FLAGS_COPY_DEST_ALWAYS);
-
-	char* cWork = cWorkBuf;
-
-	_finddata_t fd;
-	intptr_t h = gEnv->pCryPak->FindFirst(cWork, &fd, ICryPak::EPathResolutionRules::FLAGS_PATH_REAL, /*bAllOwUseFileSystem =*/ true);
-
-	char cWildcardFullPath[MAX_PATH];
-	cry_sprintf(cWildcardFullPath, "*.%s", PathUtil::GetExt(pWildcardIn));
-
-	char* pDestName = strrchr(cWork, '\\');
-	if (!pDestName)
-		pDestName = cWork;
-	else
-		++pDestName;
-	if (h != -1)
-	{
-		std::vector<string> files;
-		do
-		{
-			strcpy(pDestName, fd.name);
-			if (PathUtil::MatchWildcard(cWork, cWildcardFullPath))
-			{
-				string buffer(PathUtil::GetFileName(strlwr(cWork)));
-				names.push_back(buffer);
-			}
-		} while (gEnv->pCryPak->FindNext(h, &fd) >= 0);
-	}
-}
-////////////
-
-dll_string EntityClassNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
+SResourceSelectionResult EntityClassNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue)
 {
 	Serialization::StringListStatic names;
 
@@ -185,6 +147,9 @@ dll_string EntityClassNameSelector(const SResourceSelectorContext& context, cons
 
 	while (IEntityClass* pClass = entityClassRegistry.IteratorNext())
 	{
+		if ((pClass->GetFlags() & ECLF_INVISIBLE) != 0)
+			continue;
+
 		names.push_back(pClass->GetName());
 	}
 
@@ -194,16 +159,18 @@ dll_string EntityClassNameSelector(const SResourceSelectorContext& context, cons
 	const QPoint pos = QCursor::pos();
 	dictionary.ExecAt(pos);
 
+	SResourceSelectionResult result{ false, "" };
 	CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
 	if (pEntry)
 	{
-		return QtUtil::ToString(pEntry->GetName()).c_str();
+		result.selectedResource = QtUtil::ToString(pEntry->GetName()).c_str();
+		result.selectionAccepted = true;
 	}
 
-	return "";
+	return result;
 }
 
-dll_string ActionMapNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
+SResourceSelectionResult ActionMapNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue)
 {
 	Serialization::StringListStatic names;
 
@@ -222,17 +189,19 @@ dll_string ActionMapNameSelector(const SResourceSelectorContext& context, const 
 
 	const QPoint pos = QCursor::pos();
 	dictionary.ExecAt(pos);
+	SResourceSelectionResult result{ false, "" };
 
 	CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
 	if (pEntry)
 	{
-		return QtUtil::ToString(pEntry->GetName()).c_str();
+		result.selectedResource = QtUtil::ToString(pEntry->GetName()).c_str();
+		result.selectionAccepted = true;
 	}
 
-	return "";
+	return result;
 }
 
-dll_string ActionMapActionNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
+SResourceSelectionResult ActionMapActionNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue)
 {
 	CrySchematycEditor::CActionMapActionQuickSearchOptions quickSearchOptions;
 
@@ -241,17 +210,19 @@ dll_string ActionMapActionNameSelector(const SResourceSelectorContext& context, 
 
 	const QPoint pos = QCursor::pos();
 	dictionary.ExecAt(pos);
+	SResourceSelectionResult result{ false, "" };
 
 	CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
 	if (pEntry)
 	{
-		return QtUtil::ToString(pEntry->GetName()).c_str();
+		result.selectedResource = QtUtil::ToString(pEntry->GetName()).c_str();
+		result.selectionAccepted = true;
 	}
 
-	return "";
+	return result;
 }
 
-dll_string SurfaceTypeNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
+SResourceSelectionResult SurfaceTypeNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue)
 {
 	Serialization::StringListStatic names;
 
@@ -269,18 +240,22 @@ dll_string SurfaceTypeNameSelector(const SResourceSelectorContext& context, cons
 
 	const QPoint pos = QCursor::pos();
 	dictionary.ExecAt(pos);
+	SResourceSelectionResult result{ false, "" };
 
 	CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
 	if (pEntry)
 	{
-		return QtUtil::ToString(pEntry->GetName()).c_str();
+		result.selectedResource = QtUtil::ToString(pEntry->GetName()).c_str();
+		result.selectionAccepted = true;
 	}
 
-	return "";
+	return result;
 }
 
-static dll_string MannequinScopeContextName(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
+static SResourceSelectionResult MannequinScopeContextNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue)
 {
+	SResourceSelectionResult result{ false, "" };
+
 	if (std::shared_ptr<Serialization::SMannequinControllerDefResourceParams> pParams = std::static_pointer_cast<Serialization::SMannequinControllerDefResourceParams>(context.pCustomParams))
 	{
 		if (pParams->pControllerDef != nullptr)
@@ -301,16 +276,19 @@ static dll_string MannequinScopeContextName(const SResourceSelectorContext& cont
 			CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
 			if (pEntry)
 			{
-				return QtUtil::ToString(pEntry->GetName()).c_str();
+				result.selectedResource = QtUtil::ToString(pEntry->GetName()).c_str();
+				result.selectionAccepted = true;
 			}
 		}
 	}
 
-	return "";
+	return result;
 }
 
-static dll_string MannequinFragmentName(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
+static SResourceSelectionResult MannequinFragmentNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue)
 {
+	SResourceSelectionResult result{ false, "" };
+
 	if (std::shared_ptr<Serialization::SMannequinControllerDefResourceParams> pParams = std::static_pointer_cast<Serialization::SMannequinControllerDefResourceParams>(context.pCustomParams))
 	{
 		if (pParams->pControllerDef != nullptr)
@@ -331,109 +309,22 @@ static dll_string MannequinFragmentName(const SResourceSelectorContext& context,
 			CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
 			if (pEntry)
 			{
-				return QtUtil::ToString(pEntry->GetName()).c_str();
+				result.selectedResource = QtUtil::ToString(pEntry->GetName()).c_str();
+				result.selectionAccepted = true;
 			}
 		}
 	}
 
-	return "";
+	return result;
 }
 
-dll_string VehicleFileNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
-{
-	//list all files from Scripts/Entities/Vehicles/Implementations/Xml
-	Serialization::StringListStatic names;  
-
-	string vehiclesFolder = string(PathUtil::GetGameFolder()) + "/Scripts/Entities/Vehicles/Implementations/Xml/*.xml";
-	SearchFilesInFolder(vehiclesFolder,names);
-
-	CrySchematycEditor::CStringListDictionary dict(names);
-	CModalPopupDictionary dictionary("Vehicle", dict);
-
-	const QPoint pos = QCursor::pos();
-	dictionary.ExecAt(pos);
-
-	CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
-	if (pEntry)
-	{
-		return QtUtil::ToString(pEntry->GetName()).c_str();
-	}
-
-	return "";
-}
-
-dll_string VehicleModificationFileNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
-{
-	Serialization::StringListStatic names;
-
-	string vehiclesFolder = string(PathUtil::GetGameFolder()) + "/Scripts/Entities/Vehicles/Implementations/Xml/Modifications/*.xml";
-	SearchFilesInFolder(vehiclesFolder, names);
-
-	CrySchematycEditor::CStringListDictionary dict(names);
-	CModalPopupDictionary dictionary("VehicleModification", dict);
-
-	const QPoint pos = QCursor::pos();
-	dictionary.ExecAt(pos);
-
-	CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
-	if (pEntry)
-	{
-		return QtUtil::ToString(pEntry->GetName()).c_str();
-	}
-
-	return "";
-}
-
-dll_string VehicleLoadoutFileNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
-{
-	Serialization::StringListStatic names;
-
-	string vehiclesFolder = string(PathUtil::GetGameFolder()) + "/Scripts/Loadouts/Vehicles/*.xml";
-	SearchFilesInFolder(vehiclesFolder, names);
-
-	CrySchematycEditor::CStringListDictionary dict(names);
-	CModalPopupDictionary dictionary("VehicleLoadout", dict);
-
-	const QPoint pos = QCursor::pos();
-	dictionary.ExecAt(pos);
-
-	CrySchematycEditor::CStringListDictionaryEntry* pEntry = static_cast<CrySchematycEditor::CStringListDictionaryEntry*>(dictionary.GetResult());
-	if (pEntry)
-	{
-		return QtUtil::ToString(pEntry->GetName()).c_str();
-	}
-
-	return "";
-}
-
-dll_string PlayerLoadoutFileNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
-{
-	return "";
-}
-
-dll_string CharacterLoadoutFileNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
-{
-	return "";
-}
-
-dll_string PlayerCharacterLoadoutNameSelector(const SResourceSelectorContext& context, const char* szPreviousValue, Serialization::StringListValue* pStringListValue)
-{
-	//search in both player and character folders
-	return "";
-}
-
-REGISTER_RESOURCE_SELECTOR("EntityClass", EntityClassNameSelector, "")
-REGISTER_RESOURCE_SELECTOR("ActionMap", ActionMapNameSelector, "")
-REGISTER_RESOURCE_SELECTOR("ActionMapAction", ActionMapActionNameSelector, "")
+REGISTER_RESOURCE_SELECTOR("EntityClassName", EntityClassNameSelector, "")
+REGISTER_RESOURCE_SELECTOR("ActionMapName", ActionMapNameSelector, "")
+REGISTER_RESOURCE_SELECTOR("ActionMapActionName", ActionMapActionNameSelector, "")
 REGISTER_RESOURCE_SELECTOR("SurfaceTypeName", SurfaceTypeNameSelector, "")
-REGISTER_RESOURCE_SELECTOR("MannequinScopeContextName", MannequinScopeContextName, "")
-REGISTER_RESOURCE_SELECTOR("MannequinFragmentName", MannequinFragmentName, "")
-REGISTER_RESOURCE_SELECTOR("VehicleName", VehicleFileNameSelector, "")
-REGISTER_RESOURCE_SELECTOR("VehicleModificationName", VehicleModificationFileNameSelector, "")
-REGISTER_RESOURCE_SELECTOR("VehicleLoadoutName", VehicleLoadoutFileNameSelector, "")
-REGISTER_RESOURCE_SELECTOR("PlayerLoadoutName", PlayerLoadoutFileNameSelector, "")
-REGISTER_RESOURCE_SELECTOR("CharacterLoadoutName", CharacterLoadoutFileNameSelector, "")
-REGISTER_RESOURCE_SELECTOR("PlayerCharacterLoadoutName", PlayerCharacterLoadoutNameSelector, "")
+REGISTER_RESOURCE_SELECTOR("MannequinScopeContextName", MannequinScopeContextNameSelector, "")
+REGISTER_RESOURCE_SELECTOR("MannequinFragmentName", MannequinFragmentNameSelector, "")
+
 }
 
 namespace CrySchematycEditor {
@@ -517,4 +408,3 @@ bool ValidateClipboardContents(const char* szPrefix)
 
 }
 }
-

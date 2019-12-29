@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include <CryCore/smartptr.h>
@@ -13,6 +13,7 @@
 #include "ZipDirFindRW.h"
 #include "CryPak.h"
 #include "ZipEncrypt.h"
+#include "FileIOWrapper.h"
 
 #ifndef OPTIMIZED_READONLY_ZIP_ENTRY
 
@@ -762,7 +763,12 @@ bool ZipDir::CacheRW::WriteCDR(FILE* fTarget)
 	size_t nSizeCDR = arrFiles.GetStats().nSizeCDR;
 	void* pCDR = m_pHeap->TempAlloc(nSizeCDR, "ZipDir::CacheRW::WriteCDR");
 	size_t nSizeCDRSerialized = arrFiles.MakeZipCDR((uint32)m_lCDROffset, pCDR, m_encryptedHeaders == HEADERS_ENCRYPTED_TEA);//(unsigned)m_lCDROffset casting for now - we wont update data.p4k
+#if defined(USE_CRY_ASSERT)
+	size_t nSizeCDRSerialized = arrFiles.MakeZipCDR((uint32)m_lCDROffset, pCDR, m_encryptedHeaders == HEADERS_ENCRYPTED_TEA);//(unsigned)m_lCDROffset casting for now - we wont update data.p4k
 	assert(nSizeCDRSerialized == nSizeCDR);
+#else
+	arrFiles.MakeZipCDR(m_lCDROffset, pCDR, m_encryptedHeaders == HEADERS_ENCRYPTED_TEA);
+#endif
 	if (m_encryptedHeaders == HEADERS_ENCRYPTED_TEA)
 	{
 	#if defined(SUPPORT_XTEA_PAK_ENCRYPTION)
@@ -853,7 +859,6 @@ bool ZipDir::CacheRW::RelinkZip(FILE* fTmp)
 {
 	FileRecordList arrFiles(GetRoot());
 	arrFiles.SortByFileOffset();
-	FileRecordList::ZipStats Stats = arrFiles.GetStats();
 
 	// we back up our file entries, because we'll need to restore them
 	// in case the operation fails

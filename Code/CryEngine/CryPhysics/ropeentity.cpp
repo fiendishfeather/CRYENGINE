@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 
@@ -630,7 +630,7 @@ void CRopeEntity::EnforceConstraints(float seglen, const quaternionf& qtv,const 
 			}
 		}
 	} else if (m_nAttach || m_nSegs && (!(m_flags & rope_subdivide_segs) || m_maxIters<sqr(m_nSegs)*10 && !m_bStrained && m_length>0)) {
-		Vec3 dir,ptend[2] = { m_segs[0].pt,m_segs[m_nSegs].pt };
+		Vec3 dir;
 		float diff,len2,seglen2=sqr(seglen),rseglen=1.0f/max(1e-10f,seglen),rseglen2=sqr(rseglen),k;
 		m_segs[0].kdP=m_segs[m_nSegs].kdP = 0;
 		if (m_flags & rope_subdivide_segs && m_vtx) {
@@ -875,21 +875,29 @@ int CRopeEntity::Action(pe_action *_action, int bThreadSafe)
 				return 1;
 		} else
 			return 0;
-		pe_params_pos pp; GetParams(&pp);
-		CRopeEntity *pentDst = (CRopeEntity*)m_pWorld->CreatePhysicalEntity(PE_ROPE,&pp);
-		pe_params_flags pf; pf.flags = m_flags;
-		pentDst->SetParams(&pf);
-		pe_simulation_params sp; GetParams(&sp);
-		pentDst->SetParams(&sp);
-		pe_params_rope pr; GetParams(&pr);
-		MARK_UNUSED pr.nSegments;
-		pentDst->SetParams(&pr);
-		new(&pr) pe_params_rope;
 
-		if (i==0)
+		pe_params_rope pr;
+		if (i==0)	{
 			pr.pEntTiedTo[0] = 0;
-		else {
+			if (!m_pTiedTo[1]) {
+				m_flags|=rope_subdivide_segs; m_nMaxSubVtx=0;
+			}
+		} else {
 			if (i<m_nSegs) {
+				pe_params_pos pp; GetParams(&pp);
+				CRopeEntity *pentDst = (CRopeEntity*)m_pWorld->CreatePhysicalEntity(PE_ROPE,&pp,0,0x5AFE);
+				pe_params_flags pf; pf.flags = m_flags;
+				pentDst->SetParams(&pf);
+				pe_simulation_params sp; GetParams(&sp);
+				pentDst->SetParams(&sp);
+				GetParams(&pr);
+				MARK_UNUSED pr.nSegments;
+				if (!m_pTiedTo[1]) {
+					pr.nMaxSubVtx=0; pentDst->m_flags|=rope_subdivide_segs;
+				}
+				pentDst->SetParams(&pr);
+				new(&pr) pe_params_rope;
+
 				float seglen = m_length/m_nSegs;
 				if (pentDst->m_nSegs < m_nSegs-i) {
 					if (pentDst->m_segs) delete[] pentDst->m_segs;
@@ -1557,7 +1565,7 @@ float CRopeEntity::Solver(float time_interval, float seglen)
 		Ebefore += m_segs[i].vel.len2();
 
 	if (m_bHasContacts+m_nAttach || m_flags & rope_subdivide_segs) {
-		CRY_PROFILE_REGION(PROFILE_PHYSICS, "Rope solver MC");
+		CRY_PROFILE_SECTION(PROFILE_PHYSICS, "Rope solver MC");
 		int bBounced; iter=m_maxIters;
 		float vrel,vreq,dPtang;
 		Vec3 dp;
@@ -1654,7 +1662,7 @@ float CRopeEntity::Solver(float time_interval, float seglen)
 				m_segs[i].vel = m_vtx[m_segs[i].iVtx0].vel;
 		}
 	}	else {
-		CRY_PROFILE_REGION(PROFILE_PHYSICS, "Rope solver CG");
+		CRY_PROFILE_SECTION(PROFILE_PHYSICS, "Rope solver CG");
 		m_segs[0].vcontact.x = 0;
 		m_segs[0].vcontact.y = m_segs[1].dir*m_segs[0].dir;
 		m_segs[0].vcontact.z = (m_segs[0].vel-m_segs[1].vel)*m_segs[0].dir;
@@ -1911,10 +1919,9 @@ int CRopeEntity::Step(float time_interval)
 	if (m_nSegs<=0 || !m_bAwake)
 		return 1;
 	CRY_PROFILE_FUNCTION(PROFILE_PHYSICS );
-	PHYS_ENTITY_PROFILER
 	
 	int iCaller = get_iCaller_int();
-	float seglen=m_length/m_nSegs,seglen2=sqr(seglen), rseglen=m_nSegs/max(1e-6f,m_length),rseglen2=sqr(rseglen),scale; 
+	float seglen=m_length/m_nSegs, rseglen=m_nSegs/max(1e-6f,m_length),scale; 
 	int i,j,k,iDir,iEnd,iter,bTargetPoseActive=m_bTargetPoseActive,bGridLocked=0,bHasContacts=0,nCheckParts=0;
 	int collTypes = m_collTypes;
 	Vec3 pos,gravity,dir,ptend[2],sz,BBox[2],ptnew,dv,dw,vrel,dir0,offstv(ZERO),collBBox[2];
@@ -1955,12 +1962,14 @@ int CRopeEntity::Step(float time_interval)
 		return 1;
 	}
 	if (m_pWorld->m_bWorldStep!=2) {
-		if (m_timeStepPerformed>m_timeStepFull-0.001f || m_timeStepPerformed>0 && (m_flags & pef_invisible))
+		if (m_timeStepPerformed>m_timeStepFull-0.0001f || m_timeStepPerformed>0 && (m_flags & pef_invisible))
 			return 1;
 	}	else if (time_interval>0)
-		time_interval = max(0.001f, min(m_timeStepFull-m_timeStepPerformed, time_interval));
+		time_interval = max(0.0001f, min(m_timeStepFull-m_timeStepPerformed, time_interval));
 	else
 		return 1;
+
+	PHYS_ENTITY_PROFILER
 
 	m_timeStepPerformed += time_interval;
 	m_lastTimeStep = time_interval;
@@ -2141,7 +2150,7 @@ int CRopeEntity::Step(float time_interval)
 	collBBox[0]=BBox[0]; collBBox[1]=BBox[1];
 
 	if (collTypes & ent_all | m_flags & rope_collides_with_attachment) {
-		CRY_PROFILE_REGION(PROFILE_PHYSICS, "Rope collision");
+		CRY_PROFILE_SECTION(PROFILE_PHYSICS, "Rope collision");
 		int objtypes;
 		CPhysicalEntity **pentlist,*pentbuf[2];
 		int iseg,nEnts,iend,ippbv=0,nPrecompPartBVs=0;
@@ -2579,7 +2588,7 @@ int CRopeEntity::Update(float time_interval, float damping)
 	return 1;
 }
 
-static geom_contact g_RopeContact[MAX_PHYS_THREADS+1];
+static geom_contact g_RopeContact[MAX_TOT_THREADS];
 
 int CRopeEntity::RayTrace(SRayTraceRes& rtr)
 {
@@ -2624,16 +2633,19 @@ int CRopeEntity::RayTrace(SRayTraceRes& rtr)
 
 void CRopeEntity::ApplyVolumetricPressure(const Vec3 &epicenter, float kr, float rmin)
 {
-	if (m_nSegs>0 && m_maxForce>0 && m_pTiedTo[0] && m_pTiedTo[1]) {
+	if (m_nSegs>0) {
 		int i;
-		float dP;
+		float dP,kseg=kr*m_length*m_collDist*2,minv=1/max(1e-6f,m_mass);
 		Vec3 r;
 		int bThreadSafe = -(get_iCaller()-MAX_PHYS_THREADS>>31);
 		for(i=0,dP=0; i<m_nSegs; i++) {
 			r = (m_segs[i].pt+m_segs[i+1].pt)*0.5f-epicenter;
-			dP += (m_segs[i].dir^r).len()/(r.len()*max(r.len2(),rmin*rmin));
+			float dPseg = kseg*(m_segs[i].dir^r).len()/(r.len()*max(r.len2(),rmin*rmin));
+			if (!m_bStrained)
+				m_segs[i].vel += r.GetNormalizedFast()*min(20.0f,dPseg*minv);
+			dP += dPseg;
 		}
-		if (dP*kr*m_length*m_collDist*2 > m_maxForce*0.01f) {
+		if (m_maxForce>0 && m_pTiedTo[0] && m_pTiedTo[1] && dP > m_maxForce*0.01f) {
 			EventPhysJointBroken epjb;
 			epjb.idJoint=0; epjb.bJoint=0; MARK_UNUSED epjb.pNewEntity[0],epjb.pNewEntity[1];
 			epjb.pEntity[0]=epjb.pEntity[1]=this; epjb.pForeignData[0]=epjb.pForeignData[1]=m_pForeignData; 
@@ -3026,9 +3038,7 @@ float CRopeEntity::GetExtent(EGeomForm eForm)	const
 
 void CRopeEntity::GetRandomPoints(Array<PosNorm> points, CRndGen& seed, EGeomForm eForm) const
 {
-
-	CGeomExtent const& ext = m_Extents[GeomForm_Edges];
-	if (eForm != GeomForm_Vertices && !ext.NumParts())
+	if (eForm != GeomForm_Vertices && !m_Extents[GeomForm_Edges].NumParts())
 		return points.fill(ZERO);
 
 	strided_pointer<Vec3> vtx;
@@ -3042,7 +3052,7 @@ void CRopeEntity::GetRandomPoints(Array<PosNorm> points, CRndGen& seed, EGeomFor
 			dir = (vtx[min(i+1,nVerts-1)] - vtx[max(i-1,0)]).normalized();
 		}
 		else {
-			int i = ext.RandomPart(seed);
+			int i = m_Extents[GeomForm_Edges].RandomPart(seed);
 			ran.vPos = vtx[i]+(vtx[i+1]-vtx[i])*seed.GetRandom(0.0f, 1.0f);
 			dir = (vtx[i+1]-vtx[i]).normalized();
 		}

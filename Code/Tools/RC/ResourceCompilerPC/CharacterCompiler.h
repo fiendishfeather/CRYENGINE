@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #ifndef CHARACTER_COMPILER
 #define CHARACTER_COMPILER
@@ -11,9 +11,9 @@ class CContentCGF;
 class CChunkFile;
 struct CNodeCGF;
 class CPhysicsInterface;
-class ICryXML;
+struct ICryXML;
 class CLoaderCGF;
-class ILoaderCGFListener;
+struct ILoaderCGFListener;
 struct CMaterialCGF;
 struct CSkinningInfo;
 struct SVClothInfoCGF;

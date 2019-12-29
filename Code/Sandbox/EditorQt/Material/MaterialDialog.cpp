@@ -1,15 +1,21 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
-#include "Material.h"
 
+#include "MaterialDialog.h"
+
+#include "Material.h"
 #include "MaterialImageListCtrl.h"
 #include "MaterialManager.h"
 #include "MaterialHelpers.h"
 #include "MaterialLibrary.h"
+#include "MatEditPreviewDlg.h"
+#include "Objects/SelectionGroup.h"
+#include "LogFile.h"
 
 #include "ViewManager.h"
 #include "Util/Clipboard.h"
+#include "AssetSystem/AssetGenerator.h"
 
 #include "Controls/PropertyItem.h"
 #include "Util/CubemapUtils.h"
@@ -17,11 +23,12 @@
 
 #include <Cry3DEngine/I3DEngine.h>
 #include <QtViewPane.h>
+#include <Objects/BaseObject.h>
+#include <IUndoObject.h>
 
-#include "MatEditPreviewDlg.h"
-#include "MaterialDialog.h"
-#include <CrySystem/Scaleform/IFlashUI.h>
 #include "Controls/QuestionDialog.h"
+#include <CrySystem/Scaleform/IFlashUI.h>
+#include <Cry3DEngine/ISurfaceType.h>
 
 #define IDW_MTL_BROWSER_PANE    AFX_IDW_CONTROLBAR_FIRST + 10
 #define IDW_MTL_PROPERTIES_PANE AFX_IDW_CONTROLBAR_FIRST + 11
@@ -34,14 +41,14 @@ class CMaterialEditorClass : public IViewPaneClass
 	//////////////////////////////////////////////////////////////////////////
 	// IClassDesc
 	//////////////////////////////////////////////////////////////////////////
-	virtual ESystemClassID SystemClassID()   override { return ESYSTEM_CLASS_VIEWPANE; };
-	virtual const char*    ClassName()       override { return MATERIAL_EDITOR_NAME; };
-	virtual const char*    Category()        override { return "Editor"; };
+	virtual ESystemClassID SystemClassID()   override { return ESYSTEM_CLASS_VIEWPANE; }
+	virtual const char*    ClassName()       override { return MATERIAL_EDITOR_NAME; }
+	virtual const char*    Category()        override { return "Editor"; }
 	virtual const char*    GetMenuPath()     override { return ""; }
 	//////////////////////////////////////////////////////////////////////////
-	virtual CRuntimeClass* GetRuntimeClass() override { return RUNTIME_CLASS(CMaterialDialog); };
-	virtual const char*    GetPaneTitle()    override { return _T(MATERIAL_EDITOR_NAME); };
-	virtual bool           SinglePane()      override { return true; };
+	virtual CRuntimeClass* GetRuntimeClass() override { return RUNTIME_CLASS(CMaterialDialog); }
+	virtual const char*    GetPaneTitle()    override { return _T(MATERIAL_EDITOR_NAME); }
+	virtual bool           SinglePane()      override { return true; }
 };
 
 REGISTER_CLASS_DESC(CMaterialEditorClass);
@@ -467,7 +474,7 @@ public:
 		AddVariable(tableAdvanced, bNoShadow, "No Shadow");
 		AddVariable(tableAdvanced, bScatter, "Use Scattering");
 		AddVariable(tableAdvanced, bHideAfterBreaking, "Hide After Breaking");
-		AddVariable(tableAdvanced, bBlendTerrainColor, "Blend Terrain Color");
+		AddVariable(tableAdvanced, bBlendTerrainColor, "Blend Terrain Color (deprecated)");
 		AddVariable(tableAdvanced, bTraceableTexture, "Traceable Texture");
 
 		AddVariable(tableAdvanced, furAmount, "Fur Amount");
@@ -1307,7 +1314,7 @@ void CMaterialUI::SetToMaterial(CMaterial* mtl, int propagationFlags)
 
 	if (propagationFlags & MTL_PROPAGATE_MATERIAL_SETTINGS)
 	{
-		mtl->SetSurfaceTypeName(surfaceType);
+		mtl->SetSurfaceTypeName(surfaceType, false); // do not update material info here, it happens afterwards
 		// If shader name is different reload shader.
 		mtl->SetShaderName(shader);
 	}
@@ -1319,7 +1326,7 @@ void CMaterialUI::SetToMaterial(CMaterial* mtl, int propagationFlags)
 class CMtlPickCallback : public IPickObjectCallback
 {
 public:
-	CMtlPickCallback() { m_bActive = true; };
+	CMtlPickCallback() { m_bActive = true; }
 	//! Called when object picked.
 	virtual void OnPick(CBaseObject* picked)
 	{
@@ -1344,7 +1351,7 @@ public:
 		else
 			return false;
 	}
-	static bool IsActive() { return m_bActive; };
+	static bool IsActive() { return m_bActive; }
 private:
 	static bool m_bActive;
 };
@@ -1492,7 +1499,7 @@ BOOL CMaterialDialog::OnInitDialog()
 
 	m_propsCtrl.Create(WS_CHILD | WS_BORDER, rc, this, AFX_IDW_PANE_FIRST);
 	m_vars = m_pMaterialUI->CreateVars();
-	CPropertyItem* varsItems = m_propsCtrl.AddVarBlock(m_vars);
+	m_propsCtrl.AddVarBlock(m_vars);
 
 	m_publicVarsItems = m_propsCtrl.FindItemByVar(m_pMaterialUI->tableShaderParams.GetVar());
 	m_shaderGenParamsVarsItem = m_propsCtrl.FindItemByVar(m_pMaterialUI->tableShaderGenParams.GetVar());
@@ -1617,6 +1624,10 @@ void CMaterialDialog::OnSaveItem()
 			{
 				CQuestionDialog::SWarning(QObject::tr(""), QObject::tr("The material file cannot be saved. The file is located in a PAK archive or access is denied"));
 			}
+		}
+		else
+		{
+			AssetManagerHelpers::GenerateCryasset(pMtl->GetFilename(true));
 		}
 
 		pMtl->Reload();
@@ -1880,7 +1891,6 @@ void CMaterialDialog::OnUpdateProperties(IVariable* var)
 		bShaderGenMaskChanged = m_shaderGenParamsVars->IsContainsVariable(var);
 
 	bool bMtlLayersChanged = false;
-	SMaterialLayerResources* pMtlLayerResources = mtl->GetMtlLayerResources();
 	int nCurrLayer = -1;
 
 	// Check for shader changes
@@ -2140,18 +2150,20 @@ void CMaterialDialog::OnUpdateObjectSelected(CCmdUI* pCmdUI)
 //////////////////////////////////////////////////////////////////////////
 void CMaterialDialog::OnPickMtl()
 {
-	if (GetIEditorImpl()->GetEditTool() && GetIEditorImpl()->GetEditTool()->GetRuntimeClass()->m_lpszClassName == "CMaterialPickTool")
+	CEditTool* pTool = GetIEditorImpl()->GetLevelEditorSharedState()->GetEditTool();
+	if (pTool && pTool->GetRuntimeClass()->m_lpszClassName == "CMaterialPickTool")
 	{
-		GetIEditorImpl()->SetEditTool(NULL);
+		GetIEditorImpl()->GetLevelEditorSharedState()->SetEditTool(NULL);
 	}
 	else
-		GetIEditorImpl()->SetEditTool("EditTool.PickMaterial");
+		GetIEditorImpl()->GetLevelEditorSharedState()->SetEditTool("EditTool.PickMaterial");
 }
 
 //////////////////////////////////////////////////////////////////////////
 void CMaterialDialog::OnUpdatePickMtl(CCmdUI* pCmdUI)
 {
-	if (GetIEditorImpl()->GetEditTool() && GetIEditorImpl()->GetEditTool()->GetRuntimeClass()->m_lpszClassName == "CMaterialPickTool")
+	CEditTool* pTool = GetIEditorImpl()->GetLevelEditorSharedState()->GetEditTool();
+	if (pTool && pTool->GetRuntimeClass()->m_lpszClassName == "CMaterialPickTool")
 	{
 		pCmdUI->SetCheck(1);
 	}
@@ -2261,4 +2273,3 @@ BOOL CMaterialDialog::PreTranslateMessage(MSG* pMsg)
 
 	return __super::PreTranslateMessage(pMsg);
 }
-

@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
@@ -82,6 +82,10 @@ public:
 	}
 
 private:
+
+	void PushOp(OperatorQueue::SOp op);
+
 	std::vector<OperatorQueue::SOp> m_ops[2];
 	uint32 m_current;
+	uint32 m_lastPushFrameId;
 };

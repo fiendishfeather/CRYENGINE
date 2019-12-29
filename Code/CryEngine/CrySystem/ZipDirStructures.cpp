@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "MTSafeAllocator.h"
@@ -8,12 +8,14 @@
 #include <zstd.h>
 #include "ZipFileFormat.h"
 #include "ZipDirStructures.h"
+#include "FileIOWrapper.h"
 #include <time.h>
 #include <stdlib.h>
 #include <CrySystem/ISystem.h>
 #include <CryThreading/IJobManager.h>
 #include "CryPak.h"
 #include <CryThreading/IJobManager_JobDelegator.h>
+#include <CryMath/Random.h>
 
 #ifdef SUPPORT_UNBUFFERED_IO
 	#include <shlwapi.h>
@@ -73,13 +75,9 @@ static void ZlibOverlapInflate(int* pReturnCode, z_stream* pZStream, ZipDir::Unc
 				                     ? sizeof(lookahead.buffer) - nWrZ
 				                     : nWrW - nWrZ;
 			}
-			else if (!nIn)
+			else if (CRY_VERIFY(!nIn))
 			{
 				break;
-			}
-			else
-			{
-				__debugbreak();
 			}
 		}
 
@@ -223,7 +221,7 @@ void ZlibInflateElementPartial_Impl(
 	}
 
 	//error during inflate
-	if (*pReturnCode != Z_STREAM_END && *pReturnCode != Z_OK)
+	if (!CRY_VERIFY(*pReturnCode == Z_STREAM_END || *pReturnCode == Z_OK))
 	{
 		if (*pReturnCode != Z_NEED_DICT)
 		{
@@ -254,11 +252,8 @@ void ZlibInflateElementPartial_Impl(
 	{
 		z_inflateEnd(pZStream);
 	}
-	else if (bUsingLocal)
+	else if (!CRY_VERIFY(!bUsingLocal))
 	{
-#ifndef _RELEASE
-		__debugbreak();
-#endif
 		*pReturnCode = Z_VERSION_ERROR;
 	}
 }
@@ -327,7 +322,7 @@ void ZlibInflateElement_Impl(const void* pCompressed, void* pUncompressed, unsig
 //////////////////////////////////////////////////////////////////////////
 void ZipDir::CZipFile::LoadToMemory(IMemoryBlock* pData)
 {
-	LOADING_TIME_PROFILE_SECTION;
+	CRY_PROFILE_FUNCTION(PROFILE_LOADING_ONLY);
 
 	if (!m_pInMemoryData)
 	{
@@ -561,7 +556,7 @@ ZipDir::FileEntry::FileEntry(const CDRFileHeader& header, const SExtraZipFileDat
 // way it's stored into zip file
 int ZipDir::ZipRawUncompress(CMTSafeHeap* pHeap, void* pUncompressed, unsigned long* pDestSize, const void* pCompressed, unsigned long nSrcSize)
 {
-	LOADING_TIME_PROFILE_SECTION(gEnv->pSystem);
+	CRY_PROFILE_FUNCTION(PROFILE_LOADING_ONLY);
 	int nReturnCode;
 
 	ZlibInflateElement_Impl(pCompressed, pUncompressed, nSrcSize, *pDestSize, pDestSize, &nReturnCode, pHeap);

@@ -1,21 +1,14 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "SystemFilterProxyModel.h"
 
 #include "Asset.h"
 #include "SystemSourceModel.h"
-
-#include <ModelUtils.h>
+#include "Common/ModelUtils.h"
 
 namespace ACE
 {
-//////////////////////////////////////////////////////////////////////////
-CSystemFilterProxyModel::CSystemFilterProxyModel(QObject* const pParent)
-	: QAttributeFilterProxyModel(QDeepFilterProxyModel::Behavior::AcceptIfChildMatches, pParent)
-{
-}
-
 //////////////////////////////////////////////////////////////////////////
 bool CSystemFilterProxyModel::rowMatchesFilter(int sourceRow, QModelIndex const& sourceParent) const
 {
@@ -23,15 +16,15 @@ bool CSystemFilterProxyModel::rowMatchesFilter(int sourceRow, QModelIndex const&
 
 	if (QAttributeFilterProxyModel::rowMatchesFilter(sourceRow, sourceParent))
 	{
-		QModelIndex const& index = sourceModel()->index(sourceRow, 0, sourceParent);
+		QModelIndex const index = sourceModel()->index(sourceRow, 0, sourceParent);
 
 		if (index.isValid())
 		{
 			CAsset const* const pAsset = CSystemSourceModel::GetAssetFromIndex(index, static_cast<int>(CSystemSourceModel::EColumns::Name));
-			CRY_ASSERT_MESSAGE(pAsset != nullptr, "Asset is null pointer.");
+			CRY_ASSERT_MESSAGE(pAsset != nullptr, "Asset is null pointer during %s", __FUNCTION__);
 
 			// Hide internal controls.
-			matchesFilter = (pAsset->GetFlags() & EAssetFlags::IsInternalControl) == 0;
+			matchesFilter = (pAsset->GetFlags() & EAssetFlags::IsInternalControl) == EAssetFlags::None;
 		}
 	}
 
@@ -56,8 +49,8 @@ bool CSystemFilterProxyModel::lessThan(QModelIndex const& left, QModelIndex cons
 		}
 		else
 		{
-			QVariant const& valueLeft = sourceModel()->data(left, Qt::DisplayRole);
-			QVariant const& valueRight = sourceModel()->data(right, Qt::DisplayRole);
+			QVariant const valueLeft = sourceModel()->data(left, Qt::DisplayRole);
+			QVariant const valueRight = sourceModel()->data(right, Qt::DisplayRole);
 			isLessThan = valueLeft < valueRight;
 		}
 	}

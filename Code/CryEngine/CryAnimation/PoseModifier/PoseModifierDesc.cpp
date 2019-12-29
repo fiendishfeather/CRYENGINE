@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "stdafx.h"
 #include "PoseModifierDesc.h"
@@ -53,6 +53,46 @@ struct SSerializableNode : public PoseModifier::SNode
 bool Serialize(Serialization::IArchive& ar, PoseModifier::SNode& value, const char* name, const char* label)
 {
 	return ar(static_cast<SSerializableNode&>(value), name, label);
+}
+
+bool SJointNode::IsSet() const
+{
+	return !name.empty();
+}
+
+bool SJointNode::ResolveJointIndex(const IDefaultSkeleton& skeleton)
+{
+	bool bSuccess = false;
+
+	jointId = INVALID_JOINT_ID;
+
+	if (IsSet())
+	{
+		jointId = skeleton.GetJointIDByCRC32(crc32);
+		bSuccess = (jointId != INVALID_JOINT_ID);
+	}
+
+	return bSuccess;
+}
+
+struct SSerializableJointNode : public PoseModifier::SJointNode
+{
+	void Serialize(Serialization::IArchive& ar)
+	{
+		ar(Serialization::JointName(name), "name", "^");
+		if (ar.isInput())
+		{
+			if (name.length())
+				crc32 = CCrc32::ComputeLowercase(name.c_str());
+			else
+				crc32 = 0;
+		}
+	}
+};
+
+bool Serialize(Serialization::IArchive& ar, PoseModifier::SJointNode& value, const char* name, const char* label)
+{
+	return ar(static_cast<SSerializableJointNode&>(value), name, label);
 }
 
 void SConstraintPointNodeDesc::Serialize(Serialization::IArchive& ar)

@@ -1,9 +1,11 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
 #include <CryRenderer/IRenderer.h>
 #include <CryRenderer/IShader.h>
+
+#include <CryPhysics/physinterface.h>
 
 #include <CrySchematyc/ResourceTypes.h>
 #include <CrySchematyc/MathTypes.h>
@@ -118,6 +120,8 @@ struct SRenderParameters
 
 	EMiniumSystemSpec                     m_castShadowSpec = EMiniumSystemSpec::Always;
 	bool                                  m_bIgnoreVisAreas = false;
+	bool                                  m_bIgnoreTerrainLayerBlend = false;
+	bool                                  m_bIgnoreDecalBlend = false;
 	Schematyc::Range<0, 100, 0, 100, int> m_viewDistanceRatio = 100;
 	Schematyc::Range<0, 100, 0, 100, int> m_lodDistance = 100;
 	EMeshGIMode                           m_giMode = EMeshGIMode::Disabled;
@@ -128,6 +132,8 @@ static void ReflectType(Schematyc::CTypeDesc<SRenderParameters>& desc)
 	desc.SetGUID("{291C60F6-A493-41B3-AC63-B9E0187DC074}"_cry_guid);
 	desc.AddMember(&SRenderParameters::m_castShadowSpec, 'shad', "ShadowSpec", "Minimum Shadow Graphics", "Minimum graphical setting to cast shadows from this light", EMiniumSystemSpec::Always);
 	desc.AddMember(&SRenderParameters::m_bIgnoreVisAreas, 'visa', "IgnoreVisArea", "Ignore Visareas", "Whether this component will ignore vis areas", false);
+	desc.AddMember(&SRenderParameters::m_bIgnoreTerrainLayerBlend, 'itlb', "IgnoreTerrainLayerBlend", "Ignore Terrain Layer Blending", "Whether this component will ignore terrain layer blending", false);
+	desc.AddMember(&SRenderParameters::m_bIgnoreDecalBlend, 'idb', "IgnoreDecalBlend", "Ignore Decal Blending", "Whether this component will ignore decal blending", false);
 	desc.AddMember(&SRenderParameters::m_viewDistanceRatio, 'view', "ViewDistRatio", "View Distance", "View distance from 0 to 100, 100 being always visible", 100);
 	desc.AddMember(&SRenderParameters::m_lodDistance, 'lodd', "LODDistance", "LOD Distance", "Level of Detail distance from 0 to 100, 100 being always best LOD", 100);
 	desc.AddMember(&SRenderParameters::m_giMode, 'gimo', "GIMode", "GI and Usage Mode", "The way object is used by GI and by some other systems", EMeshGIMode::Disabled);
@@ -135,48 +141,56 @@ static void ReflectType(Schematyc::CTypeDesc<SRenderParameters>& desc)
 
 // Base implementation for our physics mesh components
 class CBaseMeshComponent
-	: public IEntityComponent
+	: public IEditorEntityComponent
 {
 protected:
 	// IEntityComponent
 	virtual void ProcessEvent(const SEntityEvent& event) override
 	{
-		if (event.event == ENTITY_EVENT_PHYSICAL_TYPE_CHANGED || event.event == ENTITY_EVENT_SLOT_CHANGED)
+		switch (event.event)
 		{
-			ApplyBaseMeshProperties();
-		}
-		else
+		case ENTITY_EVENT_SLOT_CHANGED:
 		{
-			if (event.event == ENTITY_EVENT_COMPONENT_PROPERTY_CHANGED)
+			if (event.nParam[0] /* Updated Slot Id */ == GetEntitySlotId())
 			{
-				switch (m_physics.m_weightType)
-				{
-				case SPhysicsParameters::EWeightType::Mass:
-					{
-						m_physics.m_mass = max((float)m_physics.m_mass, SPhysicsParameters::s_weightTypeEpsilon);
-					}
-					break;
-				case SPhysicsParameters::EWeightType::Density:
-					{
-						m_physics.m_density = max((float)m_physics.m_density, SPhysicsParameters::s_weightTypeEpsilon);
-					}
-					break;
-				}
 
-				m_pEntity->UpdateComponentEventMask(this);
-
+		case ENTITY_EVENT_PHYSICAL_TYPE_CHANGED:
 				ApplyBaseMeshProperties();
 			}
 		}
+		break;
+
+		case ENTITY_EVENT_COMPONENT_PROPERTY_CHANGED:
+		{
+			switch (m_physics.m_weightType)
+			{
+			case SPhysicsParameters::EWeightType::Mass:
+			{
+				m_physics.m_mass = max((float)m_physics.m_mass, SPhysicsParameters::s_weightTypeEpsilon);
+			}
+			break;
+			case SPhysicsParameters::EWeightType::Density:
+			{
+				m_physics.m_density = max((float)m_physics.m_density, SPhysicsParameters::s_weightTypeEpsilon);
+			}
+			break;
+			}
+
+			m_pEntity->UpdateComponentEventMask(this);
+
+			ApplyBaseMeshProperties();
+		}
+		break;
+		}
 	}
 
-	virtual uint64 GetEventMask() const override
+	virtual Cry::Entity::EventFlags GetEventMask() const override
 	{
-		uint64 bitFlags = ENTITY_EVENT_BIT(ENTITY_EVENT_COMPONENT_PROPERTY_CHANGED) | ENTITY_EVENT_BIT(ENTITY_EVENT_SLOT_CHANGED);
+		Cry::Entity::EventFlags bitFlags = ENTITY_EVENT_COMPONENT_PROPERTY_CHANGED | ENTITY_EVENT_SLOT_CHANGED;
 
 		if (((uint32)m_type & (uint32)EMeshType::Collider) != 0)
 		{
-			bitFlags |= ENTITY_EVENT_BIT(ENTITY_EVENT_PHYSICAL_TYPE_CHANGED);
+			bitFlags |= ENTITY_EVENT_PHYSICAL_TYPE_CHANGED;
 		}
 
 		return bitFlags;
@@ -185,73 +199,92 @@ protected:
 
 	void ApplyBaseMeshProperties()
 	{
-		if (GetEntitySlotId() != EmptySlotId)
+		if (((uint32)m_type & (uint32)EMeshType::Render) != 0)
 		{
-			if (((uint32)m_type & (uint32)EMeshType::Render) != 0)
+			m_pEntity->SetSlotFlags(GetEntitySlotId(), ENTITY_SLOT_RENDER);
+		}
+		else
+		{
+			m_pEntity->SetSlotFlags(GetEntitySlotId(), 0);
+		}
+
+		if (IRenderNode* pRenderNode = m_pEntity->GetSlotRenderNode(GetEntitySlotId()))
+		{
+			uint32 slotFlags = m_pEntity->GetSlotFlags(GetEntitySlotId());
+			if (m_renderParameters.m_castShadowSpec != EMiniumSystemSpec::Disabled && (int)gEnv->pSystem->GetConfigSpec() >= (int)m_renderParameters.m_castShadowSpec)
 			{
-				m_pEntity->SetSlotFlags(GetEntitySlotId(), ENTITY_SLOT_RENDER);
+				slotFlags |= ENTITY_SLOT_CAST_SHADOW;
 			}
-			else
+			if (m_renderParameters.m_bIgnoreVisAreas)
 			{
-				m_pEntity->SetSlotFlags(GetEntitySlotId(), 0);
+				slotFlags |= ENTITY_SLOT_IGNORE_VISAREAS;
+			}
+			if (!m_renderParameters.m_bIgnoreTerrainLayerBlend)
+			{
+				slotFlags |= ENTITY_SLOT_ALLOW_TERRAIN_LAYER_BLEND;
+			}
+			if (!m_renderParameters.m_bIgnoreDecalBlend)
+			{
+				slotFlags |= ENTITY_SLOT_ALLOW_DECAL_BLEND;
+			}
+				
+			UpdateGIModeEntitySlotFlags((uint8)m_renderParameters.m_giMode, slotFlags);
+
+			const uint32 integrateIntoTerrainBits =
+				(((uint8)EMeshGIMode::IntegrateIntoTerrain & 1) ? ENTITY_SLOT_GI_MODE_BIT0 : 0) |
+				(((uint8)EMeshGIMode::IntegrateIntoTerrain & 2) ? ENTITY_SLOT_GI_MODE_BIT1 : 0) |
+				(((uint8)EMeshGIMode::IntegrateIntoTerrain & 4) ? ENTITY_SLOT_GI_MODE_BIT2 : 0);
+
+			// Request update of terrain mesh if IntegrateIntoTerrain state was modified
+			if ((slotFlags & (ENTITY_SLOT_GI_MODE_BIT0 | ENTITY_SLOT_GI_MODE_BIT1 | ENTITY_SLOT_GI_MODE_BIT2)) == integrateIntoTerrainBits)
+			{
+				AABB nodeBox = pRenderNode->GetBBox();
+				gEnv->p3DEngine->GetITerrain()->ResetTerrainVertBuffers(&nodeBox);
 			}
 
-			if (IRenderNode* pRenderNode = m_pEntity->GetSlotRenderNode(GetEntitySlotId()))
+			m_pEntity->SetSlotFlags(GetEntitySlotId(), slotFlags);
+
+			// We want to manage our own view distance ratio
+			m_pEntity->AddFlags(ENTITY_FLAG_CUSTOM_VIEWDIST_RATIO);
+			pRenderNode->SetViewDistRatio((int)floor(((float)m_renderParameters.m_viewDistanceRatio / 100.f) * 255));
+			pRenderNode->SetLodRatio((int)floor(((float)m_renderParameters.m_lodDistance / 100.f) * 255));
+		}
+
+		m_pEntity->UnphysicalizeSlot(GetEntitySlotId());
+
+		if (((uint32)m_type & (uint32)EMeshType::Collider) != 0)
+		{
+			if (IPhysicalEntity* pPhysicalEntity = m_pEntity->GetPhysicalEntity())
 			{
-				uint32 slotFlags = m_pEntity->GetSlotFlags(GetEntitySlotId());
-				if (m_renderParameters.m_castShadowSpec != EMiniumSystemSpec::Disabled && (int)gEnv->pSystem->GetConfigSpec() >= (int)m_renderParameters.m_castShadowSpec)
+				SEntityPhysicalizeParams physParams;
+				physParams.nSlot = GetEntitySlotId();
+				physParams.type = pPhysicalEntity->GetType();
+				physParams.nLod = m_ragdollLod;
+				physParams.fStiffnessScale = m_ragdollStiffness;
+
+				switch (m_physics.m_weightType)
 				{
-					slotFlags |= ENTITY_SLOT_CAST_SHADOW;
-				}
-				if (m_renderParameters.m_bIgnoreVisAreas)
-				{
-					slotFlags |= ENTITY_SLOT_IGNORE_VISAREAS;
-				}
-
-				UpdateGIModeEntitySlotFlags((uint8)m_renderParameters.m_giMode, slotFlags);
-
-				m_pEntity->SetSlotFlags(GetEntitySlotId(), slotFlags);
-
-				// We want to manage our own view distance ratio
-				m_pEntity->AddFlags(ENTITY_FLAG_CUSTOM_VIEWDIST_RATIO);
-				pRenderNode->SetViewDistRatio((int)floor(((float)m_renderParameters.m_viewDistanceRatio / 100.f) * 255));
-				pRenderNode->SetLodRatio((int)floor(((float)m_renderParameters.m_lodDistance / 100.f) * 255));
-			}
-
-			m_pEntity->UnphysicalizeSlot(GetEntitySlotId());
-
-			if (((uint32)m_type & (uint32)EMeshType::Collider) != 0)
-			{
-				if (IPhysicalEntity* pPhysicalEntity = m_pEntity->GetPhysicalEntity())
-				{
-					SEntityPhysicalizeParams physParams;
-					physParams.nSlot = GetEntitySlotId();
-					physParams.type = pPhysicalEntity->GetType();
-
-					switch (m_physics.m_weightType)
+				case SPhysicsParameters::EWeightType::Mass:
 					{
-					case SPhysicsParameters::EWeightType::Mass:
-						{
-							physParams.mass = m_physics.m_mass;
-							physParams.density = -1.0f;
-						}
-						break;
-					case SPhysicsParameters::EWeightType::Density:
-						{
-							physParams.density = m_physics.m_density;
-							physParams.mass = -1.0f;
-						}
-						break;
-					case SPhysicsParameters::EWeightType::Immovable:
-						{
-							physParams.density = -1.0f;
-							physParams.mass = 0.0f;
-						}
-						break;
+						physParams.mass = m_physics.m_mass;
+						physParams.density = -1.0f;
 					}
-
-					m_pEntity->PhysicalizeSlot(GetEntitySlotId(), physParams);
+					break;
+				case SPhysicsParameters::EWeightType::Density:
+					{
+						physParams.density = m_physics.m_density;
+						physParams.mass = -1.0f;
+					}
+					break;
+				case SPhysicsParameters::EWeightType::Immovable:
+					{
+						physParams.density = -1.0f;
+						physParams.mass = 0.0f;
+					}
+					break;
 				}
+
+				m_pEntity->PhysicalizeSlot(GetEntitySlotId(), physParams);
 			}
 		}
 	}
@@ -267,6 +300,9 @@ public:
 
 	virtual SPhysicsParameters& GetPhysicsParameters()       { return m_physics; }
 	const SPhysicsParameters&   GetPhysicsParameters() const { return m_physics; }
+
+	int   m_ragdollLod       = 1;
+	float m_ragdollStiffness = 0;
 
 protected:
 	SPhysicsParameters m_physics;

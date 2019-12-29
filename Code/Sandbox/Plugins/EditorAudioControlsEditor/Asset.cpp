@@ -1,24 +1,18 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "StdAfx.h"
 #include "Asset.h"
 
-#include "AudioControlsEditorPlugin.h"
+#include "AssetsManager.h"
 #include "AssetUtils.h"
+#include "NameValidator.h"
 
 namespace ACE
 {
 //////////////////////////////////////////////////////////////////////////
-CAsset::CAsset(string const& name, EAssetType const type)
-	: m_name(name)
-	, m_type(type)
-	, m_flags(EAssetFlags::None)
-{}
-
-//////////////////////////////////////////////////////////////////////////
 CAsset* CAsset::GetChild(size_t const index) const
 {
-	CRY_ASSERT_MESSAGE(index < m_children.size(), "Asset child index out of bounds.");
+	CRY_ASSERT_MESSAGE(index < m_children.size(), "Asset child index out of bounds during %s", __FUNCTION__);
 
 	CAsset* pAsset = nullptr;
 
@@ -54,19 +48,34 @@ void CAsset::RemoveChild(CAsset const* const pChildControl)
 //////////////////////////////////////////////////////////////////////////
 void CAsset::SetName(string const& name)
 {
-	if ((!name.IsEmpty()) && (name != m_name) && ((m_flags& EAssetFlags::IsDefaultControl) == 0))
+	string fixedName = name;
+	g_nameValidator.FixupString(fixedName);
+
+	if ((!fixedName.IsEmpty()) && (fixedName != m_name) && ((m_flags& EAssetFlags::IsDefaultControl) == EAssetFlags::None) && g_nameValidator.IsValid(fixedName))
 	{
 		if (m_type == EAssetType::Library)
 		{
-			m_name = AssetUtils::GenerateUniqueLibraryName(name);
-			SetModified(true);
-			g_assetsManager.OnAssetRenamed(this);
+			string const oldName = m_name;
+			m_name = AssetUtils::GenerateUniqueLibraryName(fixedName, this);
+			m_id = AssetUtils::GenerateUniqueAssetId(m_name, m_type);
+
+			if (m_name != oldName)
+			{
+				SetModified(true);
+				g_assetsManager.OnAssetRenamed(this);
+			}
 		}
 		else if (m_type == EAssetType::Folder)
 		{
-			m_name = AssetUtils::GenerateUniqueName(name, m_type, m_pParent);
-			SetModified(true);
-			g_assetsManager.OnAssetRenamed(this);
+			string const oldName = m_name;
+			m_name = AssetUtils::GenerateUniqueName(fixedName, m_type, this, m_pParent);
+			m_id = AssetUtils::GenerateUniqueFolderId(m_name, m_pParent);
+
+			if (m_name != oldName)
+			{
+				SetModified(true);
+				g_assetsManager.OnAssetRenamed(this);
+			}
 		}
 	}
 }
@@ -74,7 +83,25 @@ void CAsset::SetName(string const& name)
 //////////////////////////////////////////////////////////////////////////
 void CAsset::UpdateNameOnMove(CAsset* const pParent)
 {
-	m_name = AssetUtils::GenerateUniqueName(m_name, m_type, pParent);
+	m_name = AssetUtils::GenerateUniqueName(m_name, m_type, this, pParent);
+
+	switch (m_type)
+	{
+	case EAssetType::State:
+		{
+			m_id = AssetUtils::GenerateUniqueStateId(pParent->GetName(), m_name);
+			break;
+		}
+	case EAssetType::Folder:
+		{
+			m_id = AssetUtils::GenerateUniqueFolderId(m_name, pParent);
+			break;
+		}
+	default:
+		{
+			break;
+		}
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -123,7 +150,7 @@ string CAsset::GetFullHierarchyName() const
 //////////////////////////////////////////////////////////////////////////
 bool CAsset::HasDefaultControlChildren(AssetNames& names) const
 {
-	bool hasDefaultControlChildren = (m_flags& EAssetFlags::IsDefaultControl) != 0;
+	bool hasDefaultControlChildren = (m_flags& EAssetFlags::IsDefaultControl) != EAssetFlags::None;
 
 	if (hasDefaultControlChildren)
 	{
@@ -152,7 +179,7 @@ void CAsset::Serialize(Serialization::IArchive& ar)
 {
 	string const name = m_name;
 
-	if ((m_flags& EAssetFlags::IsDefaultControl) != 0)
+	if ((m_flags& EAssetFlags::IsDefaultControl) != EAssetFlags::None)
 	{
 		ar(name, "name", "!Name");
 	}
@@ -165,7 +192,7 @@ void CAsset::Serialize(Serialization::IArchive& ar)
 
 	string const description = m_description;
 
-	if ((m_flags& EAssetFlags::IsDefaultControl) != 0)
+	if ((m_flags& EAssetFlags::IsDefaultControl) != EAssetFlags::None)
 	{
 		ar(description, "description", "!Description");
 	}

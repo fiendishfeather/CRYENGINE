@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
@@ -19,6 +19,15 @@ template<typename T> struct SIMD_traits
 
 template<typename F> using vector4_t = typename SIMD_traits<F>::vector4_t;
 template<typename V> using scalar_t  = typename SIMD_traits<V>::scalar_t;
+
+struct scalar_types
+{
+	template<typename T> using type = typename SIMD_traits<T>::scalar_t;
+};
+struct vector4_types
+{
+	template<typename T> using type = typename SIMD_traits<T>::vector4_t;
+};
 
 #if CRY_PLATFORM_SSE2
 
@@ -93,10 +102,6 @@ template<> struct SIMD_traits<u32v4>
 	using scalar_t = uint32;
 };
 
-// Template conversions
-template<typename S> ILINE vector4_t<S> to_vector4(S s) { return convert<vector4_t<S>>(s); }
-template<typename V> ILINE scalar_t<V>  to_scalar(V v)  { return convert<scalar_t<V>>(v); }
-
 ///////////////////////////////////////////////////////////////////////////
 
 template<class T, class V> ILINE void check_range(V v, T lo, T hi);
@@ -123,7 +128,7 @@ template<> ILINE u32v4  convert<u32v4>()                { return _mm_setzero_si1
 template<> ILINE u32v4  convert<u32v4>(uint v)          { return _mm_set1_epi32(v); }
 template<> ILINE u32v4  convert<u32v4>(int v)           { CRY_MATH_ASSERT(v >= 0); return _mm_set1_epi32(v); }
 template<> ILINE u32v4  convert<u32v4>(f32v4 v)         { check_range(v, 0, INT_MAX); return _mm_cvttps_epi32(v); }
-template<> ILINE i32v4  convert<i32v4>(const uint32* p) { return _mm_loadu_si128((const __m128i*)p); }
+template<> ILINE u32v4  convert<u32v4>(const uint32* p) { return _mm_loadu_si128((const __m128i*)p); }
 
 template<> ILINE uint32 convert<uint32>(u32v4 v)        { return _mm_cvtsi128_si32(v); }
 
@@ -325,6 +330,9 @@ INTV4_SLOW_BINARY_OPS(u32v4, /)
 INTV4_SLOW_BINARY_OPS(i32v4, %)
 INTV4_SLOW_BINARY_OPS(u32v4, %)
 
+ILINE i32v4 operator+(i32v4 a) { return a; }
+ILINE u32v4 operator+(u32v4 a) { return a; }
+
 ILINE i32v4 operator-(i32v4 a) { return convert<i32v4>() - a; }
 
 ILINE u32v4 operator~(u32v4 a) { return a ^ one_mask(a); }
@@ -351,6 +359,7 @@ FV4_BINARY_OPS(-, _mm_sub_ps)
 FV4_BINARY_OPS(*, _mm_mul_ps)
 FV4_BINARY_OPS(/, _mm_div_ps)
 
+ILINE f32v4 operator+(f32v4 a) { return a; }
 ILINE f32v4 operator-(f32v4 a) { return convert<f32v4>() - a; }
 
 	#endif // CRY_COMPILER_MSVC
@@ -378,26 +387,38 @@ COMMPOUND_OPERATORS(u32v4, >>, Scalar)
 // Additional operators and functions for SSE intrinsics
 
 //! Convert comparison results to boolean value
+ILINE int Any(mask32v4 v)
+{
+	return _mm_movemask_ps(vcast<f32v4>(v));
+}
 ILINE bool All(mask32v4 v)
 {
-	return _mm_movemask_ps(vcast<f32v4>(v)) == 0xF;
-}
-ILINE bool Any(mask32v4 v)
-{
-	return _mm_movemask_ps(vcast<f32v4>(v)) != 0;
+	return Any(v) == 0xF;
 }
 
-template<typename T> ILINE T if_else(mask32v4 mask, T a, T b)
-{
-	#if CRY_PLATFORM_SSE4
-	return vcast<T>(_mm_blendv_ps(vcast<f32v4>(b), vcast<f32v4>(a), vcast<f32v4>(mask)));
-	#else
-	return vcast<T>(_mm_or_si128(_mm_and_si128(mask, vcast<i32v4>(a)), _mm_andnot_si128(mask, vcast<i32v4>(b))));
-	#endif
-}
+#if CRY_PLATFORM_SSE4
+	template<typename T> ILINE T if_else(mask32v4 mask, T a, T b)
+	{
+		return vcast<T>(_mm_blendv_ps(vcast<f32v4>(b), vcast<f32v4>(a), vcast<f32v4>(mask)));
+	}
+#else
+	template<typename T> ILINE T if_else(mask32v4 mask, T a, T b)
+	{
+		return vcast<T>(_mm_or_si128( _mm_and_si128(mask, vcast<i32v4>(a)), _mm_andnot_si128(mask, vcast<i32v4>(b)) ));
+	}
+	template<> ILINE f32v4 if_else(mask32v4 mask, f32v4 a, f32v4 b)
+	{
+		return _mm_or_ps( _mm_and_ps(vcast<f32v4>(mask), a), _mm_andnot_ps(vcast<f32v4>(mask), b) );
+	}
+#endif
+
 template<typename T> ILINE T if_else_zero(mask32v4 mask, T a)
 {
 	return vcast<T>(_mm_and_si128(mask, vcast<i32v4>(a)));
+}
+template<> ILINE f32v4 if_else_zero(mask32v4 mask, f32v4 a)
+{
+	return _mm_and_ps(vcast<f32v4>(mask), a);
 }
 
 template<class T, class V> ILINE void check_range(V v, T lo, T hi)
@@ -420,34 +441,34 @@ template<> ILINE f32v4 max(f32v4 v0, f32v4 v1)
 template<> ILINE i32v4 min(i32v4 v0, i32v4 v1)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_min_epi32(v0, v1);
+		return _mm_min_epi32(v0, v1);
 	#else
-	return if_else(v0 < v1, v0, v1);
+		return if_else(v0 < v1, v0, v1);
 	#endif
 }
 template<> ILINE i32v4 max(i32v4 v0, i32v4 v1)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_max_epi32(v0, v1);
+		return _mm_max_epi32(v0, v1);
 	#else
-	return if_else(v1 < v0, v0, v1);
+		return if_else(v1 < v0, v0, v1);
 	#endif
 }
 
 template<> ILINE u32v4 min(u32v4 v0, u32v4 v1)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_min_epu32(v0, v1);
+		return _mm_min_epu32(v0, v1);
 	#else
-	return if_else(v0 < v1, v0, v1);
+		return if_else(v0 < v1, v0, v1);
 	#endif
 }
 template<> ILINE u32v4 max(u32v4 v0, u32v4 v1)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_max_epu32(v0, v1);
+		return _mm_max_epu32(v0, v1);
 	#else
-	return if_else(v1 < v0, v0, v1);
+		return if_else(v1 < v0, v0, v1);
 	#endif
 }
 
@@ -461,9 +482,9 @@ ILINE f32v4 abs(f32v4 v)
 ILINE i32v4 abs(i32v4 v)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_abs_epi32(v);
+		return _mm_abs_epi32(v);
 	#else
-	return if_else(v < convert<i32v4>(), -v, v);
+		return if_else(v < convert<i32v4>(), -v, v);
 	#endif
 }
 ILINE u32v4 abs(u32v4 v)
@@ -489,10 +510,10 @@ ILINE f32v4 sign(f32v4 v)
 ILINE i32v4 sign(i32v4 v)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_sign_epi32(to_v4(1), v);
+		return _mm_sign_epi32(to_v4(1), v);
 	#else
-	i32v4 zero = convert<i32v4>();
-	return _mm_cmplt_epi32(v, zero) - _mm_cmpgt_epi32(v, zero);
+		i32v4 zero = convert<i32v4>();
+		return _mm_cmplt_epi32(v, zero) - _mm_cmpgt_epi32(v, zero);
 	#endif
 }
 
@@ -500,29 +521,29 @@ ILINE i32v4 sign(i32v4 v)
 ILINE f32v4 trunc(f32v4 v)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_round_ps(v, _MM_FROUND_TO_ZERO);
+		return _mm_round_ps(v, _MM_FROUND_TO_ZERO);
 	#else
-	return convert<f32v4>(convert<i32v4>(v));
+		return convert<f32v4>(convert<i32v4>(v));
 	#endif
 }
 
 ILINE f32v4 floor(f32v4 v)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_floor_ps(v);
+		return _mm_floor_ps(v);
 	#else
-	f32v4 trunct = trunc(v);
-	return trunct + if_else_zero(trunct > v, to_v4(-1.0f));
+		f32v4 trunct = trunc(v);
+		return trunct + if_else_zero(trunct > v, to_v4(-1.0f));
 	#endif
 }
 
 ILINE f32v4 ceil(f32v4 v)
 {
 	#if CRY_PLATFORM_SSE4
-	return _mm_ceil_ps(v);
+		return _mm_ceil_ps(v);
 	#else
-	f32v4 trunct = trunc(v);
-	return trunct + if_else_zero(trunct < v, to_v4(1.0f));
+		f32v4 trunct = trunc(v);
+		return trunct + if_else_zero(trunct < v, to_v4(1.0f));
 	#endif
 }
 

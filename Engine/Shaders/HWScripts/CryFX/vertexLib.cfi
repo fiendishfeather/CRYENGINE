@@ -1,8 +1,8 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 
 // Common vertex shader. Since almost all techniques share a similar vertex shader, a common vertex shader
-// has been created to save some work/code lines and as an optimization at the same time. 
+// has been created to save some work/code lines and as an optimization at the same time.
 //
 //  Notes:
 //    - When adding new features here, make sure they work with instancing
@@ -17,31 +17,31 @@
 
 struct v2f_sh
 {
-	#if %_DS || %_PS || !ENABLE_TESSELLATION || %_RT_NO_TESSELLATION
-		float4 HPosition  : SV_POSITION;
-	#endif
+#if %_DS || %_PS || %_GS || !ENABLE_TESSELLATION || %_RT_NO_TESSELLATION
+	OUT_HPOS_IN_WPOS_SG
+#endif
 
 	#if ENABLE_TESSELLATION && !%_RT_NO_TESSELLATION
 		float4 vView     : TEXCOORDN;	// For shadow gen this is world position
-		half4 vNormal    : TEXCOORDN;
+		float4 vNormal   : TEXCOORDN;
 	#endif
 
-	#if (ENABLE_TESSELLATION && !%_RT_NO_TESSELLATION) || %_RT_ALPHATEST || %_RT_ALPHABLEND || %_RT_SAMPLE4 || %_RT_DISSOLVE
+	#if (ENABLE_TESSELLATION && !%_RT_NO_TESSELLATION) || %_RT_ALPHATEST || %_RT_ALPHABLEND || %_RT_SAMPLE4
 		float2 baseTC : TEXCOORDN;
-	#endif	
+	#endif
 
-	#if !%_RT_HW_PCF_COMPARE || %_RT_CUBEMAP0 || %_RT_SAMPLE0
+	#if (!%_RT_HW_PCF_COMPARE || %_RT_CUBEMAP0 || %_RT_SAMPLE0) && %_RT_SHADOW_DEPTH_OUTPUT_LINEAR
 		float Depth  : TEXCOORDN;
 	#endif
 
 	#if (!ENABLE_TESSELLATION || %_RT_NO_TESSELLATION) && %_RT_SAMPLE4
-		half3 Normal  : TEXCOORDN;
+		float3 Normal  : TEXCOORDN;
 		float2 Depth2  : TEXCOORDN;
 	#endif
 };
 
 struct vert2FragGeneral
-{  
+{
 #if %_GS || %_DS || %_PS || !ENABLE_TESSELLATION || %_RT_NO_TESSELLATION
   OUT_HPOS_IN_WPOS
 #endif
@@ -50,16 +50,16 @@ struct vert2FragGeneral
   float4 vTangent  : TEXCOORDN;
   float4 vBinormal : TEXCOORDN;
 
-  float4 vView     : TEXCOORDN;       
-  
-  float4 screenProj : TEXCOORDN;   //z used for instanced alpha test value  
+  float4 vView     : TEXCOORDN;
 
-#if %_RT_DECAL_TEXGEN_2D 
+  float4 screenProj : TEXCOORDN;   //z used for instanced alpha test value
+
+#if %_RT_DECAL_TEXGEN_2D
   float3 DistAtten : TEXCOORDN;
-#endif  
+#endif
 
 #if ENABLE_TESSELLATION && !%_RT_NO_TESSELLATION
-  half4 vNormal    : TEXCOORDN;
+  float4 vNormal    : TEXCOORDN;
 #endif
 
 //#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER || %BLENDLAYERLB
@@ -90,16 +90,15 @@ struct vert2fragZ
 #if %_DS || %_PS || %_GS || !ENABLE_TESSELLATION || %_RT_NO_TESSELLATION
 	OUT_HPOS_IN_WPOS
 #endif
- 
+
 	float4 baseTC     : TEXCOORDN;
 
-#if (!%GRASS && !%TEMP_TERRAIN) || %_RT_ALPHABLEND 
+#if (!%GRASS && !%TEMP_TERRAIN) || %_RT_ALPHABLEND
 	// Every mesh outputs tangent space. Grass and base terrain are particular cases, they just output normal
-	half4 vTangent   : TEXCOORDN;
-	half4 vBinormal  : TEXCOORDN;
+	float4 vTangent   : TEXCOORDN;
+	float4 vBinormal  : TEXCOORDN;
 #endif
-	half4 vNormalWS   : TEXCOORDN;
-
+	float4 vNormalWS   : TEXCOORDN;
 
 ////#if %VERTCOLORS || %DIRTLAYER || %BLENDLAYER || %BLENDLAYERLB
 //	half4 Color      : COLOR0;
@@ -111,13 +110,13 @@ half4 Color      : COLOR0;
 #endif
 
 #if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING || %PARALLAX_OCCLUSION_MAPPING || %OFFSET_BUMP_MAPPING || %_RT_ALPHABLEND || %TEMP_EYES || %LEAVES || %GRASS
-	half3 viewTS   : TEXCOORDN;
+	float3 viewTS   : TEXCOORDN;
 #endif
 
 	// deferred shading tdb: double check tessellation paths if all correct
 #if ENABLE_TESSELLATION && !%_RT_NO_TESSELLATION
 	float4 vView     : TEXCOORDN;
-	float4 vNormal     : TEXCOORDN;
+	float4 vNormal   : TEXCOORDN;
 #endif
 
 #if %_RT_MOTION_BLUR && !%_RT_ALPHABLEND
@@ -126,6 +125,21 @@ half4 Color      : COLOR0;
 
 #if !%TEMP_TERRAIN && !%SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
 	FRONT_FACE_PS
+#endif
+};
+
+struct vert2fragZPre
+{
+	OUT_HPOS_IN_WPOS
+
+#if %_RT_ALPHATEST
+	float4 baseTC     : TEXCOORDN;
+#endif
+
+	// deferred shading tdb: double check tessellation paths if all correct
+#if ENABLE_TESSELLATION && !%_RT_NO_TESSELLATION
+	float4 vView      : TEXCOORDN;
+	float4 vNormal    : TEXCOORDN;
 #endif
 };
 
@@ -163,7 +177,7 @@ float4x4 Matrix_Inst_General_Prev(inout streamPos IN)
 	float4x4 matInstPrev;
 
 	// Instancing support
-	
+
 #if !%_RT_ENVIRONMENT_CUBEMAP
 	matInstPrev[0] = CD_PrevWorldMatrix[0];
 	matInstPrev[1] = CD_PrevWorldMatrix[1];
@@ -177,7 +191,7 @@ float4x4 Matrix_Inst_General_Prev(inout streamPos IN)
 #endif
 
 	// Compose matrixes
-#if %_RT_NEAREST	
+#if %_RT_NEAREST
 	IN.InstMatrix = mul(CV_PrevViewProjNearestMatr, matInstPrev);
 #else
 	IN.InstMatrix = mul(CV_PrevViewProjMatr, matInstPrev);
@@ -198,10 +212,10 @@ float4 Pos_Prev_VS_General(float4x4 VPMatrix, inout streamPos IN)
 		float4(0,0,1,0),
 		float4(0,0,0,1)
 	};
-  
-	Matrix_Inst_General_Prev(IN);	// Apply instanced matrix 
+
+	Matrix_Inst_General_Prev(IN);	// Apply instanced matrix
 	HPosition = _pos_Modificators(IN.InstMatrix, MatrixIdentity, IN, true, true, 1.f);
-   
+
 	return HPosition;
 }
 
@@ -214,7 +228,7 @@ void vs_shared_output( in app2vertGeneral IN, inout vert2FragGeneral OUT, inout 
 #endif
 {
   // Common data
-  
+
   streamPos_FromGeneral(IN, vertPassPos);
 
 #if %SILHOUETTE_PARALLAX_OCCLUSION_MAPPING
@@ -223,24 +237,24 @@ void vs_shared_output( in app2vertGeneral IN, inout vert2FragGeneral OUT, inout 
 #endif
 
   float4 vPosDecal = vertPassPos.Position;
-  
-  float4 HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos, bRelativeToCam);     
+
+  float4 HPosition = Pos_VS_General(g_VS_ViewProjZeroMatr, vertPassPos, bRelativeToCam);
   float3 vNorm = vertPassPos.ObjToTangentSpace[2];
 
   float4 baseTC = vertPassPos.baseTC;
-#if %_RT_DECAL_TEXGEN_2D 
+#if %_RT_DECAL_TEXGEN_2D
 	_TCModifyDecal( vertPassPos, baseTC, OUT.DistAtten );
 #endif
 
   // Apply texture modifiers
   _TCModify(baseTC, OUT.baseTC, vertPassPos.Position, vNorm, TS_DIFFUSE);
- 
+
   // Note: Normalization required for normal diffuse map in world space in case scale used - Do not remove
   float3 worldTangentS = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[0]) );
   float3 worldTangentT = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[1]) );
   float3 worldTangentN = normalize( mul((const float3x3)vertPassPos.InstMatrix, vertPassPos.ObjToTangentSpace[2]) );
-    
-  OUT.vTangent = float4(worldTangentS, vertPassPos.Tangent.w); 
+
+  OUT.vTangent = float4(worldTangentS, vertPassPos.Tangent.w);
   OUT.vBinormal.xyz = worldTangentT;
 
   OUT.vView.xyz = vertPassPos.WorldPos.xyz;
@@ -249,7 +263,7 @@ void vs_shared_output( in app2vertGeneral IN, inout vert2FragGeneral OUT, inout 
 #else
   vertPassPos.WorldPos.xyz += g_VS_WorldViewPos.xyz;
 #endif
-  
+
 #if !ENABLE_TESSELLATION || %_RT_NO_TESSELLATION
   OUT.HPosition = HPosition;
 #else

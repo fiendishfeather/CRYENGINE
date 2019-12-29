@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 using System;
 using System.Collections.Generic;
@@ -91,7 +91,7 @@ namespace CryEngine
 			_listener.OnInputReceived += OnInput;
 		}
 
-		private static void RemoveListener()
+		public static void RemoveListener()
 		{
 			_listener?.Dispose();
 			_listener = null;

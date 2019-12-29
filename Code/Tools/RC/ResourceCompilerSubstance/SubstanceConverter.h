@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #pragma once
 
@@ -7,8 +7,8 @@
 #include <CryCore/StlUtils.h>    // stl::less_stricmp
 
 struct IResourceCompiler;
-class ISubstanceInstanceRenderer;
-class ISubstancePreset;
+struct ISubstanceInstanceRenderer;
+struct ISubstancePreset;
 
 class CSubstanceConverter
 	: public IConverter

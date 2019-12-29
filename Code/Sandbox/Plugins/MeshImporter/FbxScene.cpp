@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 // Tools for FBX file importing.
 
 #include "StdAfx.h"
@@ -903,16 +903,7 @@ static void CreateAllMaterials(FbxScene* pScene, std::vector<std::unique_ptr<SMa
 
 	int nextId = 0;
 
-	// Dummy material.
-	{
-		std::unique_ptr<SMaterial> pMaterial(new SMaterial());
-		pMaterial->id = nextId++;
-		CreateDummyMaterial(pMaterial.get());
-		materials.emplace_back(std::move(pMaterial));
-	}
-
 	// All materials included in the scene.
-
 	FbxArray<FbxSurfaceMaterial*> sceneMaterials;
 	pScene->FillMaterialArray(sceneMaterials);
 
@@ -937,6 +928,12 @@ static void CreateAllMaterials(FbxScene* pScene, std::vector<std::unique_ptr<SMa
 		CreateMaterial(pMaterial.get(), pFbxMaterial);
 		materials.emplace_back(std::move(pMaterial));
 	}
+
+	// Dummy material.
+	std::unique_ptr<SMaterial> pMaterial(new SMaterial());
+	pMaterial->id = nextId++;
+	CreateDummyMaterial(pMaterial.get());
+	materials.emplace_back(std::move(pMaterial));
 }
 
 #define CASE_OF_ENUM(x) case FbxNodeAttribute:: ## x: \
@@ -1076,7 +1073,6 @@ void CScene::InitializeAnimations()
 SNode* CScene::Initialize(const SFileImportDescriptor& desc)
 {
 	// Create and link nodes
-	int nextId = 0;
 	int meshCount = 0;
 
 	const int nodeCount = m_pScene->GetNodeCount();
@@ -1128,7 +1124,7 @@ SNode* CScene::Initialize(const SFileImportDescriptor& desc)
 	}
 
 	CreateAllMaterials(m_pScene.get(), m_materials);
-	m_pDummyMaterial = m_materials[0].get();
+	m_pDummyMaterial = m_materials.back().get();
 	m_materialUserData.resize(m_materials.size());
 
 	// Collect mesh instances
@@ -1181,26 +1177,9 @@ SNode* CScene::Initialize(const SFileImportDescriptor& desc)
 
 	desc.pCallbacks->OnProgressPercentage(100);
 
-	// Delete unused materials.
+	if (!m_pDummyMaterial->numMeshesUsingIt)
 	{
-		if (!m_pDummyMaterial->numMeshesUsingIt)
-		{
-			m_pDummyMaterial = nullptr;
-		}
-
-		size_t i = 0;
-		while (i < m_materials.size())
-		{
-			if (!m_materials[i]->numMeshesUsingIt)
-			{
-				std::swap(m_materials[i], m_materials.back());
-				m_materials.pop_back();
-			}
-			else
-			{
-				i++;
-			}
-		}
+		m_pDummyMaterial = nullptr;
 	}
 
 	// Create engine meshes.
@@ -1564,4 +1543,3 @@ string GetFormattedAxes(FbxTool::Axes::EAxis up, FbxTool::Axes::EAxis fwd)
 {
 	return string(GetFormattedAxis(fwd)) + string(GetFormattedAxis(up));
 }
-

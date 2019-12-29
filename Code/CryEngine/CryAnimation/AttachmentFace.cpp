@@ -1,32 +1,44 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "stdafx.h"
 #include "AttachmentFace.h"
 
 #include "AttachmentManager.h"
 #include "CharacterInstance.h"
-#include <CryMath/QTangent.h>
 #include "CharacterManager.h"
+#include <CryRenderer/IRenderAuxGeom.h>
+#include <CryMath/QTangent.h>
 
 uint32 CAttachmentFACE::Immediate_AddBinding(IAttachmentObject* pIAttachmentObject, ISkin* pISkin, uint32 nLoadingFlags)
 {
-	if (m_pIAttachmentObject)
+	if (m_pIAttachmentObject && m_pAttachmentManager)
 	{
-		uint32 IsFastUpdateType = m_pAttachmentManager->IsFastUpdateType(m_pIAttachmentObject->GetAttachmentType());
-		if (IsFastUpdateType)
+		m_pAttachmentManager->m_attachedCharactersCache.Erase(this);
+
+		if (m_pAttachmentManager->IsFastUpdateType(m_pIAttachmentObject->GetAttachmentType()))
+		{
 			m_pAttachmentManager->RemoveEntityAttachment();
+		}
 	}
 
 	SAFE_RELEASE(m_pIAttachmentObject);
 	m_pIAttachmentObject = pIAttachmentObject;
 
-	if (pIAttachmentObject)
+	if (pIAttachmentObject && m_pAttachmentManager)
 	{
-		uint32 IsFastUpdateType = m_pAttachmentManager->IsFastUpdateType(pIAttachmentObject->GetAttachmentType());
-		if (IsFastUpdateType)
+		m_pAttachmentManager->m_attachedCharactersCache.Insert(this);
+
+		if (m_pAttachmentManager->IsFastUpdateType(pIAttachmentObject->GetAttachmentType()))
+		{
 			m_pAttachmentManager->AddEntityAttachment();
+		}
 	}
-	m_pAttachmentManager->m_TypeSortingRequired++;
+
+	if (m_pAttachmentManager)
+	{
+		m_pAttachmentManager->m_TypeSortingRequired++;
+	}
+
 	return 1;
 }
 
@@ -39,21 +51,27 @@ void CAttachmentFACE::ClearBinding_Internal(bool release)
 {
 	if (m_pIAttachmentObject)
 	{
-		if (m_pAttachmentManager->m_pSkelInstance)
+		if (m_pAttachmentManager && m_pAttachmentManager->m_pSkelInstance)
 		{
+			m_pAttachmentManager->m_attachedCharactersCache.Erase(this);
+
 			uint32 IsFastUpdateType = m_pAttachmentManager->IsFastUpdateType(m_pIAttachmentObject->GetAttachmentType());
 			if (IsFastUpdateType)
 				m_pAttachmentManager->RemoveEntityAttachment();
-
-			if (release)
-			{
-				m_pIAttachmentObject->Release();
-			}
-
-			m_pIAttachmentObject = 0;
 		}
+
+		if (release)
+		{
+			m_pIAttachmentObject->Release();
+		}
+
+		m_pIAttachmentObject = 0;
 	}
-	m_pAttachmentManager->m_TypeSortingRequired++;
+
+	if (m_pAttachmentManager)
+	{
+		m_pAttachmentManager->m_TypeSortingRequired++;
+	}
 }
 
 uint32 CAttachmentFACE::Immediate_SwapBinding(IAttachment* pNewAttachment)
@@ -76,12 +94,14 @@ uint32 CAttachmentFACE::Immediate_SwapBinding(IAttachment* pNewAttachment)
 	return 0;
 }
 
-uint32 CAttachmentFACE::ProjectAttachment(const Skeleton::CPoseData* pPoseData)
+bool CAttachmentFACE::ProjectAttachment(const Skeleton::CPoseData* pPoseData)
 {
+	CRY_ASSERT(m_pAttachmentManager);
+
 	CCharInstance* pSkelInstance = m_pAttachmentManager->m_pSkelInstance;
 	CDefaultSkeleton* pDefaultSkeleton = pSkelInstance->m_pDefaultSkeleton;
 	if (pDefaultSkeleton->m_ObjectType != CHR)
-		return 0;
+		return false;
 
 	Vec3 apos = GetAttAbsoluteDefault().t;
 	ClosestTri cf;
@@ -185,14 +205,16 @@ uint32 CAttachmentFACE::ProjectAttachment(const Skeleton::CPoseData* pPoseData)
 		}
 #endif
 		m_AttFlags |= FLAGS_ATTACH_PROJECTED; //success
-		return 1;
+		return true;
 	}
 
-	return 0;
+	return false;
 }
 
 void CAttachmentFACE::ComputeTriMat()
 {
+	CRY_ASSERT(m_pAttachmentManager);
+
 	CCharInstance* pSkelInstance = m_pAttachmentManager->m_pSkelInstance;
 	const CDefaultSkeleton* pDefaultSkeleton = pSkelInstance->m_pDefaultSkeleton;
 	const CDefaultSkeleton::SJoint* pJoints = &pDefaultSkeleton->m_arrModelJoints[0];
@@ -259,64 +281,56 @@ void CAttachmentFACE::ComputeTriMat()
 
 void CAttachmentFACE::PostUpdateSimulationParams(bool bAttachmentSortingRequired, const char* pJointName)
 {
+	if (!m_pAttachmentManager)
+	{
+		return;
+	}
+
 	m_pAttachmentManager->m_TypeSortingRequired += bAttachmentSortingRequired;
 	m_Simulation.PostUpdate(m_pAttachmentManager, pJointName);
 };
 
-void CAttachmentFACE::Update_Empty(Skeleton::CPoseData& rPoseData)
+void CAttachmentFACE::Update(Skeleton::CPoseData& poseData)
 {
-	if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
-		ProjectAttachment(&rPoseData); //not projected, so do it now
-	if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
-		return; //Probably failed because mesh was not streamed in. Try again in next frame
-	ComputeTriMat();
-}
-
-void CAttachmentFACE::Update_Static(Skeleton::CPoseData& rPoseData)
-{
-	if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
+	if (!(m_AttFlags & FLAGS_ATTACH_PROJECTED))
 	{
-		ProjectAttachment(&rPoseData); //not projected, so do it now
-		if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
-			return; //Probably failed because mesh was not streamed in. Try again in next frame
+		if (!ProjectAttachment(&poseData))
+		{
+			// Probably failed because mesh was not streamed in. Try again in next frame.
+			CRY_ASSERT(!(m_AttFlags & FLAGS_ATTACH_PROJECTED));
+			return;
+		}
 	}
-	//This is a CGF. Update and simulate only when visible
-	m_AttFlags &= FLAGS_ATTACH_VISIBLE ^ -1;
-	const f32 fRadiusSqr = m_pIAttachmentObject->GetRadiusSqr();
-	if (fRadiusSqr == 0.0f)
-		return;     //if radius is zero, then the object is most probably not visible and we can continue
-	if (m_pAttachmentManager->m_fZoomDistanceSq > fRadiusSqr)
-		return;  //too small to render. cancel the update
-	m_AttFlags |= FLAGS_ATTACH_VISIBLE;
-	ComputeTriMat();
-	if (m_Simulation.m_nClampType)
-		m_Simulation.UpdateSimulation(m_pAttachmentManager, rPoseData, -1, m_AttModelRelative, m_addTransformation, GetName());
-}
 
-void CAttachmentFACE::Update_Execute(Skeleton::CPoseData& rPoseData)
-{
-	if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
+	ComputeTriMat();
+
+	const f32 fRadiusSqr = m_pIAttachmentObject ? m_pIAttachmentObject->GetRadiusSqr() : 0.0f;
+	if (fRadiusSqr != 0.0f && fRadiusSqr >= m_pAttachmentManager->m_fZoomDistanceSq)
 	{
-		ProjectAttachment(&rPoseData); //not projected, so do it now
-		if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
-			return; //Probably failed because mesh was not streamed in. Try again in next frame
+		m_AttFlags |= FLAGS_ATTACH_VISIBLE;
 	}
-	ComputeTriMat();
-	if (m_Simulation.m_nClampType)
-		m_Simulation.UpdateSimulation(m_pAttachmentManager, rPoseData, -1, m_AttModelRelative, m_addTransformation, GetName());
-	m_pIAttachmentObject->ProcessAttachment(this);
+	else
+	{
+		m_AttFlags &= ~FLAGS_ATTACH_VISIBLE;
+	}
 
-	m_AttFlags &= FLAGS_ATTACH_VISIBLE ^ -1;
-	const f32 fRadiusSqr = m_pIAttachmentObject->GetRadiusSqr();
-	if (fRadiusSqr == 0.0f)
-		return;     //if radius is zero, then the object is most probably not visible and we can continue
-	if (m_pAttachmentManager->m_fZoomDistanceSq > fRadiusSqr)
-		return;  //too small to render. cancel the update
-	m_AttFlags |= FLAGS_ATTACH_VISIBLE;
+	if ((m_AttFlags & FLAGS_ATTACH_VISIBLE) && (m_Simulation.m_nClampType != SimulationParams::DISABLED))
+	{
+		m_Simulation.UpdateSimulation(m_pAttachmentManager, poseData, -1, QuatT(m_AttModelRelative.q, m_AttModelRelative.t), m_addTransformation, GetName());
+	}
+	else
+	{
+		m_addTransformation = QuatT(IDENTITY);
+	}
 }
 
 const QuatTS CAttachmentFACE::GetAttWorldAbsolute() const
 {
+	if (!m_pAttachmentManager)
+	{
+		return m_AttModelRelative;
+	}
+
 	QuatTS rPhysLocation = m_pAttachmentManager->m_pSkelInstance->m_location;
 	return rPhysLocation * m_AttModelRelative;
 };
@@ -363,8 +377,6 @@ void CAttachmentFACE::Serialize(TSerialize ser)
 }
 void CAttachmentFACE::HideAttachment(uint32 x)
 {
-	m_pAttachmentManager->OnHideAttachment(this, FLAGS_ATTACH_HIDE_MAIN_PASS | FLAGS_ATTACH_HIDE_SHADOW_PASS | FLAGS_ATTACH_HIDE_RECURSION, x != 0);
-
 	if (x)
 		m_AttFlags |= (FLAGS_ATTACH_HIDE_MAIN_PASS | FLAGS_ATTACH_HIDE_SHADOW_PASS | FLAGS_ATTACH_HIDE_RECURSION);
 	else
@@ -373,8 +385,6 @@ void CAttachmentFACE::HideAttachment(uint32 x)
 
 void CAttachmentFACE::HideInRecursion(uint32 x)
 {
-	m_pAttachmentManager->OnHideAttachment(this, FLAGS_ATTACH_HIDE_RECURSION, x != 0);
-
 	if (x)
 		m_AttFlags |= FLAGS_ATTACH_HIDE_RECURSION;
 	else
@@ -383,8 +393,6 @@ void CAttachmentFACE::HideInRecursion(uint32 x)
 
 void CAttachmentFACE::HideInShadow(uint32 x)
 {
-	m_pAttachmentManager->OnHideAttachment(this, FLAGS_ATTACH_HIDE_RECURSION, x != 0);
-
 	if (x)
 		m_AttFlags |= FLAGS_ATTACH_HIDE_SHADOW_PASS;
 	else

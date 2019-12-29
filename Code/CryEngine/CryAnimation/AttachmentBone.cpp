@@ -1,17 +1,23 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include "stdafx.h"
 #include "AttachmentBone.h"
 
 #include "AttachmentManager.h"
 #include "CharacterInstance.h"
-#include <CryMath/QTangent.h>
 #include "CharacterManager.h"
+#include <CryRenderer/IRenderAuxGeom.h>
+#include <CryMath/QTangent.h>
 
 uint32 CAttachmentBONE::SetJointName(const char* szJointName)
 {
+	if (!m_pAttachmentManager)
+	{
+		return 0;
+	}
+
 	m_nJointID = -1;
-	if (!szJointName)  { assert(0); return 0; }
+	if (!CRY_VERIFY(szJointName))  { return 0; }
 	int nJointID = m_pAttachmentManager->m_pSkelInstance->m_pDefaultSkeleton->GetJointIDByName(szJointName);
 	if (nJointID < 0)
 	{
@@ -26,6 +32,11 @@ uint32 CAttachmentBONE::SetJointName(const char* szJointName)
 
 uint32 CAttachmentBONE::ReName(const char* szSocketName, uint32 crc)
 {
+	if (!m_pAttachmentManager)
+	{
+		return 0;
+	}
+
 	m_strSocketName.clear();
 	m_strSocketName = szSocketName;
 	m_nSocketCRC32 = crc;
@@ -35,6 +46,11 @@ uint32 CAttachmentBONE::ReName(const char* szSocketName, uint32 crc)
 
 void CAttachmentBONE::AlignJointAttachment()
 {
+	if (!m_pAttachmentManager)
+	{
+		return;
+	}
+
 	CCharInstance* pSkelInstance = m_pAttachmentManager->m_pSkelInstance;
 	int32 nJointCount = pSkelInstance->m_pDefaultSkeleton->GetJointCount();
 	if (m_nJointID < nJointCount)
@@ -44,16 +60,21 @@ void CAttachmentBONE::AlignJointAttachment()
 	}
 }
 
-uint32 CAttachmentBONE::ProjectAttachment(const Skeleton::CPoseData* pPoseData)
+bool CAttachmentBONE::ProjectAttachment(const Skeleton::CPoseData* pPoseData)
 {
+	if (!m_pAttachmentManager)
+	{
+		return false;
+	}
+
 	m_nJointID = -1;
 	int32 JointId = m_pAttachmentManager->m_pSkelInstance->m_pDefaultSkeleton->GetJointIDByName(m_strJointName.c_str());
 	if (JointId < 0)
-		return 0;
+		return false;
 	CCharInstance* pSkelInstance = m_pAttachmentManager->m_pSkelInstance;
 	int nJointCount = pSkelInstance->m_pDefaultSkeleton->GetJointCount();
 	if (JointId >= nJointCount)
-		return 0;
+		return false;
 
 	m_nJointID = JointId;
 	const CDefaultSkeleton* pDefaultSkeleton = pSkelInstance->m_pDefaultSkeleton;
@@ -64,25 +85,30 @@ uint32 CAttachmentBONE::ProjectAttachment(const Skeleton::CPoseData* pPoseData)
 #ifndef _RELEASE
 	if (pPoseData && Console::GetInst().ca_DrawAttachmentProjection && (pSkelInstance->m_CharEditMode & CA_DrawSocketLocation))
 	{
-		if (m_nJointID < 0)
-			return 1;
 		g_pAuxGeom->SetRenderFlags(e_Def3DPublicRenderflags);
 		const QuatTS& rPhysLocation = pSkelInstance->m_location;
 		const Vec3 pos = pPoseData->GetJointAbsolute(m_nJointID).t;
 		g_pAuxGeom->DrawLine(rPhysLocation * pos, RGBA8(0xff, 0xff, 0xff, 0x00), rPhysLocation * m_AttModelRelative.t, RGBA8(0xff, 0xff, 0xff, 0x00), 10);
 	}
 #endif
-	return 1;
+	return true;
 }
 
 void CAttachmentBONE::PostUpdateSimulationParams(bool bAttachmentSortingRequired, const char* pJointName)
 {
+	if (!m_pAttachmentManager)
+	{
+		return;
+	}
+
 	m_pAttachmentManager->m_TypeSortingRequired += bAttachmentSortingRequired;
 	m_Simulation.PostUpdate(m_pAttachmentManager, pJointName);
 };
 
 void CAttachmentBONE::Update_Redirected(Skeleton::CPoseData& rPoseData)
 {
+	CRY_ASSERT(m_pAttachmentManager);
+
 	if (m_nJointID < 0)
 		return;
 	if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
@@ -116,79 +142,44 @@ void CAttachmentBONE::Update_Redirected(Skeleton::CPoseData& rPoseData)
 #endif
 }
 
-void CAttachmentBONE::Update_Empty(Skeleton::CPoseData& rPoseData)
+void CAttachmentBONE::Update(Skeleton::CPoseData& poseData)
 {
-	if (m_nJointID < 0)
-		return;
-	if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
-		ProjectAttachment(&rPoseData);
-	m_AttModelRelative = rPoseData.GetJointAbsoluteOPS(m_nJointID) * m_AttRelativeDefault;
+	CRY_ASSERT(m_pAttachmentManager);
 
-#ifndef _RELEASE
-	CCharInstance* pSkelInstance = m_pAttachmentManager->m_pSkelInstance;
-	if (pSkelInstance->m_CharEditMode & CA_DrawSocketLocation)
+	if (m_nJointID < 0)
 	{
-		g_pAuxGeom->SetRenderFlags(e_Def3DPublicRenderflags);
-		const QuatTS& rPhysLocation = pSkelInstance->m_location;
-		const Vec3 pos = rPoseData.GetJointAbsolute(m_nJointID).t;
-		g_pAuxGeom->DrawLine(rPhysLocation * pos, RGBA8(0xff, 0x00, 0x00, 0xff), rPhysLocation * m_AttModelRelative.t, RGBA8(0x00, 0xff, 0x00, 0xff));
+		return;
 	}
-#endif
 
-}
-
-void CAttachmentBONE::Update_Static(Skeleton::CPoseData& rPoseData)
-{
-	if (m_nJointID < 0)
-		return;
-	if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
-		ProjectAttachment(&rPoseData);
-	m_AttFlags &= FLAGS_ATTACH_VISIBLE ^ -1;
-	const f32 fRadiusSqr = m_pIAttachmentObject->GetRadiusSqr();
-	if (fRadiusSqr == 0.0f)
-		return;  //if radius is zero, then the object is most probably not visible and we can continue
-	if (m_pAttachmentManager->m_fZoomDistanceSq > fRadiusSqr)
-		return;  //too small to render. cancel the update
-
-	m_AttModelRelative = rPoseData.GetJointAbsoluteOPS(m_nJointID) * m_AttRelativeDefault;
-	if (m_Simulation.m_nClampType)
-		m_Simulation.UpdateSimulation(m_pAttachmentManager, rPoseData, -1, QuatT(m_AttModelRelative.q, m_AttModelRelative.t), m_addTransformation, GetName());
-	else
-		m_addTransformation = QuatT(IDENTITY);
-	m_AttFlags |= FLAGS_ATTACH_VISIBLE;
-
-#ifndef _RELEASE
-	CCharInstance* pSkelInstance = m_pAttachmentManager->m_pSkelInstance;
-	if (pSkelInstance->m_CharEditMode & CA_DrawSocketLocation)
+	if (!(m_AttFlags & FLAGS_ATTACH_PROJECTED))
 	{
-		g_pAuxGeom->SetRenderFlags(e_Def3DPublicRenderflags);
-		const QuatTS& rPhysLocation = pSkelInstance->m_location;
-		const Vec3 pos = rPoseData.GetJointAbsolute(m_nJointID).t;
-		g_pAuxGeom->DrawLine(rPhysLocation * pos, RGBA8(0xff, 0x00, 0x00, 0xff), rPhysLocation * m_AttModelRelative.t, RGBA8(0x00, 0xff, 0x00, 0xff));
+		if (!ProjectAttachment(&poseData))
+		{
+			CRY_ASSERT(!(m_AttFlags & FLAGS_ATTACH_PROJECTED));
+			return;
+		}
 	}
-#endif
-}
 
-void CAttachmentBONE::Update_Execute(Skeleton::CPoseData& rPoseData)
-{
-	if (m_nJointID < 0)
-		return;
-	if ((m_AttFlags & FLAGS_ATTACH_PROJECTED) == 0)
-		ProjectAttachment(&rPoseData);
-	m_AttModelRelative = rPoseData.GetJointAbsoluteOPS(m_nJointID) * m_AttRelativeDefault;
-	if (m_Simulation.m_nClampType)
-		m_Simulation.UpdateSimulation(m_pAttachmentManager, rPoseData, -1, QuatT(m_AttModelRelative.q, m_AttModelRelative.t), m_addTransformation, GetName());
+	m_AttModelRelative = poseData.GetJointAbsoluteOPS(m_nJointID) * m_AttRelativeDefault;
+
+	const f32 fRadiusSqr = m_pIAttachmentObject ? m_pIAttachmentObject->GetRadiusSqr() : 0.0f;
+	if (fRadiusSqr != 0.0f && fRadiusSqr >= m_pAttachmentManager->m_fZoomDistanceSq)
+	{
+		m_AttFlags |= FLAGS_ATTACH_VISIBLE;
+	}
 	else
-		m_addTransformation = QuatT(IDENTITY);
-	m_pIAttachmentObject->ProcessAttachment(this);
+	{
+		m_AttFlags &= ~FLAGS_ATTACH_VISIBLE;
+	}
 
-	m_AttFlags &= FLAGS_ATTACH_VISIBLE ^ -1;
-	const f32 fRadiusSqr = m_pIAttachmentObject->GetRadiusSqr();
-	if (fRadiusSqr == 0.0f)
-		return;     //if radius is zero, then the object is most probably not visible and we can continue
-	if (m_pAttachmentManager->m_fZoomDistanceSq > fRadiusSqr)
-		return;  //too small to render. cancel the update
-	m_AttFlags |= FLAGS_ATTACH_VISIBLE;
+	if ((m_AttFlags & FLAGS_ATTACH_VISIBLE) && (m_Simulation.m_nClampType != SimulationParams::DISABLED))
+	{
+		m_Simulation.UpdateSimulation(m_pAttachmentManager, poseData, -1, QuatT(m_AttModelRelative.q, m_AttModelRelative.t), m_addTransformation, GetName());
+	}
+	else
+	{
+		m_addTransformation = QuatT(IDENTITY);
+	}
 
 #ifndef _RELEASE
 	CCharInstance* pSkelInstance = m_pAttachmentManager->m_pSkelInstance;
@@ -196,8 +187,9 @@ void CAttachmentBONE::Update_Execute(Skeleton::CPoseData& rPoseData)
 	{
 		g_pAuxGeom->SetRenderFlags(e_Def3DPublicRenderflags);
 		const QuatTS& rPhysLocation = pSkelInstance->m_location;
-		const Vec3 pos = rPoseData.GetJointAbsolute(m_nJointID).t;
-		g_pAuxGeom->DrawLine(rPhysLocation * pos, RGBA8(0xff, 0x00, 0x00, 0xff), rPhysLocation * m_AttModelRelative.t, RGBA8(0x00, 0xff, 0x00, 0xff));
+		const Vec3 jointPosition = rPhysLocation * poseData.GetJointAbsolute(m_nJointID).t;
+		const Vec3 socketPosition = rPhysLocation * m_AttModelRelative.t;
+		g_pAuxGeom->DrawLine(jointPosition, RGBA8(0xff, 0x00, 0x00, 0xff), socketPosition, RGBA8(0x00, 0xff, 0x00, 0xff));
 	}
 #endif
 }
@@ -212,14 +204,26 @@ const QuatT& CAttachmentBONE::GetAttModelRelative() const
 
 const QuatTS CAttachmentBONE::GetAttWorldAbsolute() const
 {
+	if (!m_pAttachmentManager)
+	{
+		return m_AttModelRelative;
+	}
+
 	const QuatTS& rPhysLocation = m_pAttachmentManager->m_pSkelInstance->m_location;
 	return rPhysLocation * m_AttModelRelative;
 }
 
 void CAttachmentBONE::UpdateAttModelRelative()
 {
-	if (m_nJointID < 0)
+	if (!m_pAttachmentManager)
+	{
 		return;
+	}
+
+	if (m_nJointID < 0)
+	{
+		return;
+	}
 
 	const Skeleton::CPoseData& poseData = m_pAttachmentManager->m_pSkelInstance->m_SkeletonPose.GetPoseData();
 	m_AttModelRelative = poseData.GetJointAbsoluteOPS(m_nJointID) * m_AttRelativeDefault;
@@ -227,23 +231,34 @@ void CAttachmentBONE::UpdateAttModelRelative()
 
 uint32 CAttachmentBONE::Immediate_AddBinding(IAttachmentObject* pIAttachmentObject, ISkin* pISkin, uint32 nLoadingFlags)
 {
-	if (m_pIAttachmentObject)
+	if (m_pIAttachmentObject && m_pAttachmentManager)
 	{
-		uint32 IsFastUpdateType = m_pAttachmentManager->IsFastUpdateType(m_pIAttachmentObject->GetAttachmentType());
-		if (IsFastUpdateType)
+		m_pAttachmentManager->m_attachedCharactersCache.Erase(this);
+
+		if (m_pAttachmentManager->IsFastUpdateType(m_pIAttachmentObject->GetAttachmentType()))
+		{
 			m_pAttachmentManager->RemoveEntityAttachment();
+		}
 	}
 
 	SAFE_RELEASE(m_pIAttachmentObject);
 	m_pIAttachmentObject = pIAttachmentObject;
 
-	if (pIAttachmentObject)
+	if (pIAttachmentObject && m_pAttachmentManager)
 	{
-		uint32 IsFastUpdateType = m_pAttachmentManager->IsFastUpdateType(pIAttachmentObject->GetAttachmentType());
-		if (IsFastUpdateType)
+		m_pAttachmentManager->m_attachedCharactersCache.Insert(this);
+
+		if (m_pAttachmentManager->IsFastUpdateType(pIAttachmentObject->GetAttachmentType()))
+		{
 			m_pAttachmentManager->AddEntityAttachment();
+		}
 	}
-	m_pAttachmentManager->m_TypeSortingRequired++;
+
+	if (m_pAttachmentManager)
+	{
+		m_pAttachmentManager->m_TypeSortingRequired++;
+	}
+
 	return 1;
 }
 
@@ -256,21 +271,27 @@ void CAttachmentBONE::ClearBinding_Internal(bool release)
 {
 	if (m_pIAttachmentObject)
 	{
-		if (m_pAttachmentManager->m_pSkelInstance)
+		if (m_pAttachmentManager && m_pAttachmentManager->m_pSkelInstance)
 		{
+			m_pAttachmentManager->m_attachedCharactersCache.Erase(this);
+
 			uint32 IsFastUpdateType = m_pAttachmentManager->IsFastUpdateType(m_pIAttachmentObject->GetAttachmentType());
 			if (IsFastUpdateType)
 				m_pAttachmentManager->RemoveEntityAttachment();
-
-			if (release)
-			{
-				m_pIAttachmentObject->Release();
-			}
-
-			m_pIAttachmentObject = 0;
 		}
+
+		if (release)
+		{
+			m_pIAttachmentObject->Release();
+		}
+
+		m_pIAttachmentObject = 0;
 	}
-	m_pAttachmentManager->m_TypeSortingRequired++;
+
+	if (m_pAttachmentManager)
+	{
+		m_pAttachmentManager->m_TypeSortingRequired++;
+	}
 }
 
 uint32 CAttachmentBONE::Immediate_SwapBinding(IAttachment* pNewAttachment)
@@ -331,8 +352,6 @@ void CAttachmentBONE::Serialize(TSerialize ser)
 
 void CAttachmentBONE::HideAttachment(uint32 x)
 {
-	m_pAttachmentManager->OnHideAttachment(this, FLAGS_ATTACH_HIDE_MAIN_PASS | FLAGS_ATTACH_HIDE_SHADOW_PASS | FLAGS_ATTACH_HIDE_RECURSION, x != 0);
-
 	if (x)
 		m_AttFlags |= (FLAGS_ATTACH_HIDE_MAIN_PASS | FLAGS_ATTACH_HIDE_SHADOW_PASS | FLAGS_ATTACH_HIDE_RECURSION);
 	else
@@ -341,8 +360,6 @@ void CAttachmentBONE::HideAttachment(uint32 x)
 
 void CAttachmentBONE::HideInRecursion(uint32 x)
 {
-	m_pAttachmentManager->OnHideAttachment(this, FLAGS_ATTACH_HIDE_RECURSION, x != 0);
-
 	if (x)
 		m_AttFlags |= FLAGS_ATTACH_HIDE_RECURSION;
 	else
@@ -351,8 +368,6 @@ void CAttachmentBONE::HideInRecursion(uint32 x)
 
 void CAttachmentBONE::HideInShadow(uint32 x)
 {
-	m_pAttachmentManager->OnHideAttachment(this, FLAGS_ATTACH_HIDE_SHADOW_PASS, x != 0);
-
 	if (x)
 		m_AttFlags |= FLAGS_ATTACH_HIDE_SHADOW_PASS;
 	else

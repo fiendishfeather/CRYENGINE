@@ -1,4 +1,4 @@
-// Copyright 2001-2018 Crytek GmbH / Crytek Group. All rights reserved.
+// Copyright 2001-2019 Crytek GmbH / Crytek Group. All rights reserved.
 
 #include <StdAfx.h>
 
@@ -15,13 +15,15 @@
 #include "EditorStyleHelper.h"
 #include "QtUtil.h"
 
+#include <IEditor.h>
+
 // Qt
 #include <QApplication>
 #include <QDesktopWidget>
+#include <QEvent>
 #include <QPropertyAnimation>
 #include <QTabWidget>
 #include <QVBoxLayout>
-#include <QEvent>
 
 REGISTER_TRAY_AREA_WIDGET(CNotificationCenterTrayWidget, 10)
 
@@ -53,6 +55,10 @@ public:
 		if (!gNotificationPreferences.allowPopUps())
 			return;
 
+		QWidget* pWindow = m_pNotificationCenterWidget->window();
+		if (pWindow->windowState() & Qt::WindowMinimized)
+			return;
+
 		if (pNotificationDesc->IsLogMessage())
 		{
 			for (CNotificationWidget* pNotification : m_notificationPopups)
@@ -65,13 +71,19 @@ public:
 			}
 		}
 
-		CNotificationWidget* pNotification = new CNotificationWidget(pNotificationDesc->GetId());
-		Add(pNotification);
-
-		// Used for when the editor is loading up. Accumulate notifications to be displayed after
-		// the main frame has finished loading. Otherwise notifications will spawn out of screen bounds
+		// Used for when the editor is loading up. Don't show notification pop-ups during startup,
+		// since they will behave erratically 
 		if (m_bPreventPopups)
+		{
 			return;
+		}
+
+		CNotificationWidget* pNotification = new CNotificationWidget(pNotificationDesc->GetId(), pWindow);
+		// Make sure notifications have a fixed width when being spawned as pop-ups. This doesn't apply
+		// to notifications displayed in the notification center.
+		pNotification->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::MinimumExpanding);
+
+		Add(pNotification);
 
 		Show(pNotification);
 	}
@@ -122,25 +134,10 @@ public:
 private:
 	void AnimateNotification(CNotificationWidget* pNotification, bool bIn)
 	{
-		QPropertyAnimation* pAlphaAnim = new QPropertyAnimation(pNotification, "windowOpacity");
-		pAlphaAnim->setDuration(animationDuration);
-		pAlphaAnim->setStartValue(bIn ? 0.0f : 1.0f);
-		pAlphaAnim->setEndValue(bIn ? 1.0 : 0.0f);
-
-		AnimateMove(pNotification, QPoint(animationDistance, 0));
-
-		pAlphaAnim->start(QAbstractAnimation::DeleteWhenStopped);
-
-		if (!bIn)
-		{
-			connect(pAlphaAnim, &QPropertyAnimation::finished, [this, pNotification]()
-			{
-				pNotification->deleteLater();
-			});
-		}
+		AnimateMove(pNotification, QPoint(animationDistance, 0), !bIn);
 	}
 
-	void AnimateMove(CNotificationWidget* pNotification, const QPoint& delta)
+	void AnimateMove(CNotificationWidget* pNotification, const QPoint& delta, bool removeOnEnd = false)
 	{
 		// Check if there's a move animation already for this notification
 		QPropertyAnimation* pMoveAnim = m_moveAnimations[pNotification];
@@ -172,11 +169,16 @@ private:
 
 		m_moveAnimations.insert(pNotification, pMoveAnim);
 
-		connect(pMoveAnim, &QPropertyAnimation::finished, [this, pNotification, pMoveAnim]()
+		connect(pMoveAnim, &QPropertyAnimation::finished, [this, pNotification, pMoveAnim, removeOnEnd]()
 		{
 			// Make sure we don't track this move anim after it's done playing
 			if (m_moveAnimations.contains(pNotification) && pMoveAnim == m_moveAnimations[pNotification])
 				m_moveAnimations.remove(pNotification);
+
+			if (removeOnEnd)
+			{
+				pNotification->deleteLater();
+			}
 		});
 	}
 
@@ -218,6 +220,9 @@ private:
 		{
 			yDelta += m_notificationPopups[i]->height() + notificationDistance;
 		}
+
+		if (m_pNotificationCenterWidget->window()->windowState() & Qt::WindowMinimized)
+			return false;
 
 		pNotification->ShowAt(m_pNotificationCenterWidget->mapToGlobal(QPoint(0, yDelta)));
 
@@ -335,8 +340,6 @@ private:
 	int animationDistance;
 	int notificationMaxCount;
 
-	//
-	int                                              m_lastShownIdx;
 	QWidget*                                         m_pNotificationCenterWidget;
 	QVector<CNotificationWidget*>                    m_notificationPopups;
 	// Ongoing geometry animations need to be cached so we can update the end value if needed
@@ -394,8 +397,6 @@ CNotificationCenterTrayWidget::CNotificationCenterTrayWidget(QWidget* pParent /*
 		m_pPopUpMenu = new QPopupWidget("NotificationCenterPopup", QtUtil::MakeScrollable(new CNotificationCenterWidget()), QSize(480, 640));
 		m_pPopUpMenu->SetFocusShareWidget(this);
 		m_pPopUpMenu->installEventFilter(this); // used to catch show and hide events
-
-		m_pPopUpManager->SetPreventPopUps(false);
 	});
 
 	setIcon(CryIcon("icons:Dialogs/notification_text.ico"));
@@ -426,12 +427,20 @@ bool CNotificationCenterTrayWidget::eventFilter(QObject* pWatched, QEvent* pEven
 	return false;
 }
 
+void CNotificationCenterTrayWidget::showEvent(QShowEvent* pEvent)
+{
+	QToolButton::showEvent(pEvent);
+	m_pPopUpManager->SetPreventPopUps(false);
+}
+
 void CNotificationCenterTrayWidget::OnNotificationAdded(int id)
 {
 	CNotificationCenter* pNotificationCenter = static_cast<CNotificationCenter*>(GetIEditor()->GetNotificationCenter());
 	Internal::CNotification* pNotificationDesc = pNotificationCenter->GetNotification(id);
 
-	if (m_pPopUpMenu && !m_pPopUpMenu->isVisible())
+	// If we haven't constructed the notifications pop up menu or it's currently hidden, color the tray icon to show
+	// that there are un-checked notifications
+	if (!m_pPopUpMenu || !m_pPopUpMenu->isVisible())
 	{
 		Internal::CNotification::Type notificationType = pNotificationDesc->GetType();
 		if (m_notificationType >= notificationType)
@@ -518,4 +527,3 @@ void CNotificationCenterTrayWidget::SetAnimationDistance(int distance)
 	m_pPopUpManager->SetAnimationDistance(distance);
 
 }
-
